@@ -6,6 +6,7 @@
 ## DynaQuery<T>
 Пользователям `LINQ to Entities` использующим обобщенный интерфейс `IQueryable<T>` можно предложить воспользоваться обобщенным классом `DynaQuery<T>`, реализующим обобщенные интерфейсы `IEnumerable<T>`, `IEnumerator<T>`, который внутренне использует объект `DynaObject`.
 ```csharp
+	
 	//Model
     public class Nach
     {
@@ -15,6 +16,7 @@
         public double Val { get; set; }
         public string Note { get; set; }
     }
+	
 	//Реализует IEnumerable<Nach>, IEnumerator<Nach>,
 	//а также mapping свойств DynaObject на <Nach> 
     public class QueryNach : DynaQuery<Nach>
@@ -38,6 +40,7 @@
     {
         //запрос NachCut исполняется без параметров и возвращает
 		//ровно 4 колонки: Idn, Dt_Nach, Val, Note
+		
 		IDynaObject dynaObject = dataMod.GetDynaObject("NachCut");
         QueryNach queryNach = new QueryNach(dynaObject);
         int count = 0;

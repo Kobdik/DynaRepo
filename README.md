@@ -38,9 +38,7 @@
 
     static void Test1()
     {
-        //запрос NachCut исполняется без параметров и возвращает
-		//ровно 4 колонки: Idn, Dt_Nach, Val, Note
-		
+        //запрос NachCut исполняется без параметров и возвращает колонки: Idn, Dt_Nach, Val, Note;
 		IDynaObject dynaObject = dataMod.GetDynaObject("NachCut");
         QueryNach queryNach = new QueryNach(dynaObject);
         int count = 0;

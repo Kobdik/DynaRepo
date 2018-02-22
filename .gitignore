@@ -1,0 +1,8 @@
+# ignore path
+DynaLib/bin
+DynaLib/obj
+DynaLib/Properties
+DynaLib/Connected Services
+QueryApp_0/bin
+QueryApp_0/obj
+QueryApp_0/Properties

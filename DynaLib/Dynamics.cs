@@ -582,8 +582,8 @@ namespace Kobdik.Dynamics
             if (dbread)
             {
                 _current = Activator.CreateInstance<T>();
-                foreach (var binder in sel_Maps)
-                    binder.ReadToObject(_dataReader, _current);
+                foreach (var propMap in sel_Maps)
+                    propMap.ReadToObject(_dataReader, _current);
                 list.Add(_current);
             }
             else _current = list[i_current];
@@ -604,13 +604,13 @@ namespace Kobdik.Dynamics
         public void Update(T t)
         {
             //считываем связанные свойства в _dynaObject
-            foreach (var boundProp in propMaps)
-                boundProp.GetFromObject(t);
+            foreach (var propMap in propMaps)
+                propMap.GetFromObject(t);
             //отправляем изменения и получаем результаты
             var updProps = _dynaObject.Update();
             //обновляем связанные свойства по полученным результатам
-            foreach (var boundProp in propMaps.Where(bp => updProps.Contains(bp.Prop)))
-                boundProp.SetToObject(t);
+            foreach (var propMap in propMaps.Where(bp => updProps.Contains(bp.Prop)))
+                propMap.SetToObject(t);
         }
 
         public abstract void OnReset(string message);

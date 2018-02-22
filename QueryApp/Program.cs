@@ -20,7 +20,7 @@ namespace QueryApp
                 Console.WriteLine(message);
             };
             // Test it
-            Test4();
+            Test3();
             Console.Read();
         }
 
@@ -86,7 +86,7 @@ namespace QueryApp
             {
                 count++;
                 sum_gt += nach.Val;
-                //with Console - 163ms and without - 21ms
+                //with Console - 69ms and without - 24ms
                 Console.WriteLine("{0} {1} {2} {3} {4}", count, nach.Idn, nach.DtNach, nach.Val, nach.Note);
             }
             DateTime lst = DateTime.Now;

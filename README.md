@@ -7,7 +7,7 @@
 Пользователям `LINQ to Entities` использующим обобщенный интерфейс `IQueryable<T>` можно предложить воспользоваться обобщенным классом `DynaQuery<T>`, реализующим обобщенные интерфейсы `IEnumerable<T>`, `IEnumerator<T>`, который внутренне использует объект `DynaObject`.
 ```csharp
 	
-	//Model
+    //Model
     public class Nach
     {
         public Nach() { }
@@ -17,8 +17,8 @@
         public string Note { get; set; }
     }
 	
-	//Реализует IEnumerable<Nach>, IEnumerator<Nach>,
-	//а также mapping свойств DynaObject на <Nach> 
+    //Реализует IEnumerable<Nach>, IEnumerator<Nach>,
+    //а также mapping свойств DynaObject на <Nach> 
     public class QueryNach : DynaQuery<Nach>
     {
         public QueryNach(IDynaObject dynaObject) : base(dynaObject)
@@ -39,7 +39,7 @@
     static void Test1()
     {
         //запрос NachCut исполняется без параметров и возвращает колонки: Idn, Dt_Nach, Val, Note;
-		IDynaObject dynaObject = dataMod.GetDynaObject("NachCut");
+        IDynaObject dynaObject = dataMod.GetDynaObject("NachCut");
         QueryNach queryNach = new QueryNach(dynaObject);
         int count = 0;
         double sum_gt = 0;

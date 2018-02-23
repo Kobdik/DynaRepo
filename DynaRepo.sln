@@ -3,9 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27130.2024
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kobdik", "DynaLib\Kobdik.csproj", "{F5DAEBB8-0920-43A2-A201-F011B0094DFB}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QueryApp_0", "QueryApp_0\QueryApp_0.csproj", "{40B01626-E006-45C6-8747-F40697996D9B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DynaLib", "DynaLib\DynaLib.csproj", "{F5DAEBB8-0920-43A2-A201-F011B0094DFB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QueryApp", "QueryApp\QueryApp.csproj", "{BCDFC30A-5214-4BF0-8DF0-953464F603F2}"
 EndProject
@@ -19,10 +17,6 @@ Global
 		{F5DAEBB8-0920-43A2-A201-F011B0094DFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F5DAEBB8-0920-43A2-A201-F011B0094DFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F5DAEBB8-0920-43A2-A201-F011B0094DFB}.Release|Any CPU.Build.0 = Release|Any CPU
-		{40B01626-E006-45C6-8747-F40697996D9B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{40B01626-E006-45C6-8747-F40697996D9B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{40B01626-E006-45C6-8747-F40697996D9B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{40B01626-E006-45C6-8747-F40697996D9B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{BCDFC30A-5214-4BF0-8DF0-953464F603F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{BCDFC30A-5214-4BF0-8DF0-953464F603F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BCDFC30A-5214-4BF0-8DF0-953464F603F2}.Release|Any CPU.ActiveCfg = Release|Any CPU

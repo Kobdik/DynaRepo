@@ -7,10 +7,10 @@
         {
             IDynaObject dynaObject = dataMod.GetDynaObject("Invoice");
             //запрос на максимальную выборку
-			dynaObject.ParmDict["Dt_Fst"].Value = "2009.01.01";
+            dynaObject.ParmDict["Dt_Fst"].Value = "2009.01.01";
             dynaObject.ParmDict["Dt_Lst"].Value = "2017.07.01";
             long fst = DateTime.Now.Ticks;
-			//исполним запрос и запишем результат в файл
+            //исполним запрос и запишем результат в файл
             using (FileStream fs = new FileStream("Invoice.json", FileMode.Create))
             {
                 dynaObject.SelectToStream(fs);

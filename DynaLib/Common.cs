@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
+using System.Threading;
 
 namespace Kobdik.Common
 {
@@ -14,6 +16,28 @@ namespace Kobdik.Common
         void WriteProp(String propName, Int32 value);
         void WriteProp(String propName, DateTime value);
         void WriteProp(String propName, Double value);
+    }
+
+    public interface IStreamReader
+    {
+        void Open(Stream stream);
+        bool Read();
+        int TokenType();
+        object Value();
+        void Close();
+    }
+
+    public interface IStreamWriter : IPropWriter
+    {
+        byte GetStreamType();
+        void Open(Stream stream);
+        void PushArr();
+        void PushObj();
+        void PushArrProp(string propName);
+        void PushObjProp(string propName);
+        void Pop();
+        void Close();
+        string Result { get; }
     }
 
     public interface IDynaProp
@@ -34,7 +58,7 @@ namespace Kobdik.Common
     {
         IDataReader Select(IDynaProp[] parms);
         IDataReader Detail(IDynaProp prop);
-        void Update(IDynaProp[] props);
+        void Action(IDynaProp[] props, string cmd);
         string Result { get; }
     }
 
@@ -42,14 +66,20 @@ namespace Kobdik.Common
     {
         Dictionary<String, IDynaProp> ParmDict { get; }
         Dictionary<String, IDynaProp> PropDict { get; }
+        void ReadPropStream(Stream stream, string cmd);
         IDataReader Select();
         IDataReader Detail(int idn);
-        IDynaProp[] Update();
+        IDynaProp[] Action(string cmd);
+        IStreamWriter StreamWriter { get; set; }
+        void SelectToStream(Stream stream);
+        void DetailToStream(Stream stream, int idn);
+        void ActionToStream(Stream stream, string cmd);
         string Result { get; }
         string GetInfo();
     }
 
     #region DictDefinitions
+
     public class QryDef
     {
         public byte qry_id, master, col_def;

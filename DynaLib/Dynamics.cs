@@ -2,9 +2,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using Kobdik.Common;
 
 namespace Kobdik.Dynamics
@@ -248,9 +250,10 @@ namespace Kobdik.Dynamics
             detComm.CommandType = CommandType.StoredProcedure;
             detComm.CommandText = proName;
             //detail parameters
-            IDataParameter param = detComm.CreateParameter();
+            IDbDataParameter param = detComm.CreateParameter();
             param.ParameterName = String.Format("@{0}", prop.GetName());
             param.DbType = prop.GetDbType();
+            param.Size = prop.GetSize();
             param.Value = prop.Value;
             //param.Size = 4;
             detComm.Parameters.Add(param);
@@ -269,30 +272,30 @@ namespace Kobdik.Dynamics
             return db_reader;
         }
 
-        public void Update(IDynaProp[] props)
+        public void Action(IDynaProp[] props, string cmd)
         {
-            string proName = "upd_" + qry_name;
-            IDbCommand updComm = db_conn.CreateCommand();
-            updComm.CommandType = CommandType.StoredProcedure;
-            updComm.CommandText = proName;
+            IDbCommand actComm = db_conn.CreateCommand();
+            actComm.CommandType = CommandType.StoredProcedure;
+            actComm.CommandText = String.Format("{0}_{1}", cmd, qry_name);
             //fill update parameters
             foreach (IDynaProp prop in props)
             {
-                IDataParameter param = updComm.CreateParameter();
+                IDbDataParameter param = actComm.CreateParameter();
                 param.ParameterName = String.Format("@{0}", prop.GetName());
                 param.DbType = prop.GetDbType();
+                param.Size = prop.GetSize();
                 param.Value = prop.Value;
                 if ((prop.GetFlags() & 8) > 0) param.Direction = ParameterDirection.InputOutput;
-                updComm.Parameters.Add(param);
+                actComm.Parameters.Add(param);
             }
             try
             {
                 db_conn.Open();
-                if (updComm.ExecuteNonQuery() == 0)
+                if (actComm.ExecuteNonQuery() == 0)
                 {
-                    if (updComm.Parameters.Contains("@Cause"))
+                    if (actComm.Parameters.Contains("@Cause"))
                     {
-                        IDataParameter param = updComm.Parameters["@Cause"] as IDataParameter;
+                        IDataParameter param = actComm.Parameters["@Cause"] as IDataParameter;
                         Result = param.Value as string;
                     }
                     else
@@ -306,7 +309,7 @@ namespace Kobdik.Dynamics
                     if ((prop.GetFlags() & 8) > 0)
                     {
                         string parameterName = String.Format("@{0}", prop.GetName());
-                        IDataParameter param = updComm.Parameters[parameterName] as IDataParameter;
+                        IDataParameter param = actComm.Parameters[parameterName] as IDataParameter;
                         prop.Value = param.Value;
                     }
                 }
@@ -338,16 +341,19 @@ namespace Kobdik.Dynamics
     {
         #region fields
         private string qry_name;
-        private byte qry_id, src_id, act_flag;
+        private byte qry_id, src_id, col_flags;
         private object lockObj;
         #endregion fields
 
         #region properties
         public byte QryId { get { return qry_id; } }
-        public string QryName { get { return qry_name; } }
+        //public string QryName { get { return qry_name; } }
         public Dictionary<String, IDynaProp> PropDict { get; set; }
         public Dictionary<String, IDynaProp> ParmDict { get; set; }
-        public Dictionary<String, DynaObject> SlaveDict { get; set; }
+        public List<IDynaProp> ReadList { get; set; }
+        public List<DynaObject> SlaveList { get; set; }
+        public IStreamReader StreamReader { get; set; }
+        public IStreamWriter StreamWriter { get; set; }
         public IDbQuery Query { get; set; }
         public String Result { get; set; }
         #endregion
@@ -358,12 +364,14 @@ namespace Kobdik.Dynamics
             src_id = qryDef.col_def;
             qry_name = qryDef.qry_name;
             // def 45 = Idn | Det | Out | Usr
-            if (qryDef.col_flags == 0) act_flag = 45;
-            else act_flag = qryDef.col_flags;
+            if (qryDef.col_flags == 0) col_flags = 45;
+            else col_flags = qryDef.col_flags;
             // select parameters
-            ParmDict = new Dictionary<String, IDynaProp>();
+            ParmDict = new Dictionary<String, IDynaProp>(4);
             //dynamic properties
-            PropDict = new Dictionary<String, IDynaProp>();
+            PropDict = new Dictionary<String, IDynaProp>(16);
+            //ordinal properties
+            ReadList = new List<IDynaProp>(16);
             lockObj = new Object();
         }
 
@@ -427,6 +435,53 @@ namespace Kobdik.Dynamics
             if (prop != null) PropDict.Add(colDef.col_name, prop);
         }
 
+        public void ReadPropStream(Stream stream, string cmd)
+        {
+            string key;
+            int i_type;
+            Dictionary<String, IDynaProp> dictionary;
+            if (cmd == "sel") dictionary = ParmDict;
+            else dictionary = PropDict;
+            // read parameters
+            StreamReader.Open(stream);
+            while (StreamReader.Read())
+            {
+                i_type = StreamReader.TokenType();
+                if (i_type == 4) // PropName
+                {
+                    key = StreamReader.Value() as string;
+                    StreamReader.Read(); // read Value
+                    if (dictionary.ContainsKey(key))
+                        dictionary[key].Value = StreamReader.Value();
+                }
+            }
+            StreamReader.Close();
+        }
+
+        private void ReadOrdinals(IDataReader reader, int flags)
+        {
+            string key;
+            IDynaProp prop;
+            int i_ord, i_count = reader.FieldCount;
+            ReadList.Clear();
+            foreach (var p in PropDict.Values) p.Ordinal = -1;
+            for (i_ord = 0; i_ord < i_count; i_ord++)
+            {
+                key = reader.GetName(i_ord);
+                if (PropDict.Keys.Contains<string>(key))
+                {
+                    prop = PropDict[key];
+                    //read idn|sel fields for select
+                    //read idn|sel|det|usr 39=1+2+4+32 fields for detail
+                    if ((prop.GetFlags() & flags) > 0)
+                    {
+                        prop.Ordinal = i_ord;
+                        ReadList.Add(prop);
+                    }
+                }
+            }
+        }
+
         public IDataReader Select()
         {
             IDataReader result = null;
@@ -446,32 +501,157 @@ namespace Kobdik.Dynamics
             return result;
         }
 
-        public IDynaProp[] Update()
+        public IDynaProp[] Action(string cmd)
         {
-            var updProps = PropDict.Values.Where(prop => (prop.GetFlags() & act_flag) > 0).ToArray();
-            Query.Update(updProps);
+            //default idn|det|out|usr 45=1+4+8+32
+            var actProps = PropDict.Values.Where(prop => (prop.GetFlags() & col_flags) > 0).ToArray();
+            Query.Action(actProps, cmd);
             Result = Query.Result;
             //properties with returned values
-            return updProps.Where(prop => (prop.GetFlags() & 8) > 0).ToArray();
+            return actProps.Where(prop => (prop.GetFlags() & 8) > 0).ToArray();
         }
 
-        public void ReadOrdinals(IDataReader reader, int flags)
+        private void WriteRecord(IDataRecord record, List<IDynaProp> props, IPropWriter writer)
         {
-            string key;
-            IDynaProp prop;
-            int i_ord, i_count = reader.FieldCount;
-            foreach (var p in PropDict.Values) p.Ordinal = -1;
-            for (i_ord = 0; i_ord < i_count; i_ord++)
+            foreach (var prop in props)
+                prop.WriteProp(record, writer);
+        }
+
+        public void SelectToStream(Stream stream)
+        {
+            lock (lockObj)
             {
-                key = reader.GetName(i_ord);
-                if (PropDict.Keys.Contains<string>(key))
+                IDataReader selReader = null;
+                try
                 {
-                    prop = PropDict[key];
-                    //read idn|sel fields for select
-                    //read idn|sel|det|usr 39=1+2+4+32 fields for detail
-                    //read out fields for update
-                    if ((prop.GetFlags() & flags) > 0)
-                        prop.Ordinal = i_ord;
+                    StreamWriter.Open(stream);
+                    StreamWriter.PushObj();
+                    StreamWriter.PushArrProp("selected");
+                    DateTime fst = DateTime.Now;
+                    selReader = Select();
+                    if (selReader != null)
+                    {
+                        while (selReader.Read())
+                        {
+                            //if (token.IsCancellationRequested) break;
+                            StreamWriter.PushObj();
+                            WriteRecord(selReader, ReadList, StreamWriter);
+                            StreamWriter.Pop();
+                        }
+                        selReader.Close();
+                    };
+                    DateTime lst = DateTime.Now;
+                    TimeSpan ts = lst - fst;
+                    StreamWriter.Pop();
+                    StreamWriter.WriteProp("message", Query.Result);
+                    StreamWriter.WriteProp("sel_time", DateTime.Now.ToShortTimeString());
+                    StreamWriter.WriteProp("time_ms", ts.Milliseconds);
+                    StreamWriter.Pop();
+                    Result = Query.Result;
+                }
+                catch (Exception ex)
+                {
+                    Result = ex.Message;
+                }
+                finally
+                {
+                    Query.Dispose();
+                    //ошибки могут возникать только в Query
+                    StreamWriter?.Close();
+                }
+            }
+        }
+
+        public void DetailToStream(Stream stream, int idn)
+        {
+            lock (lockObj)
+            {
+                IDataReader detReader = null;
+                IDataReader selReader = null;
+                try
+                {
+                    StreamWriter.Open(stream);
+                    StreamWriter.PushObj();
+                    detReader = Detail(idn);
+                    if (detReader != null)
+                    {
+                        StreamWriter.PushObjProp("det_row");
+                        if (detReader.Read())
+                            WriteRecord(detReader, ReadList, StreamWriter);
+                        StreamWriter.Pop();
+                        detReader.Close();
+                    };
+                    if (Query.Result != "Ok") throw new Exception(Query.Result);
+                    //write slaves to stream
+                    StreamWriter.PushObjProp("slaves");
+                    foreach (var slave in SlaveList)
+                    {
+                        StreamWriter.PushArrProp(slave.qry_name);
+                        //qry_name is master column name
+                        slave.ParmDict[qry_name].Value = idn;
+                        selReader = slave.Select();
+                        if (selReader != null)
+                        {
+                            while (selReader.Read())
+                            {
+                                StreamWriter.PushObj();
+                                WriteRecord(selReader, slave.ReadList, StreamWriter);
+                                StreamWriter.Pop();
+                            }
+                            selReader.Close();
+                        };
+                        StreamWriter.Pop();
+                    }
+                    StreamWriter.Pop();
+                    StreamWriter.WriteProp("message", Query.Result);
+                    StreamWriter.WriteProp("det_time", DateTime.Now.ToShortTimeString());
+                    StreamWriter.Pop();
+                    Result = Query.Result;
+                }
+                catch (Exception ex)
+                {
+                    Result = ex.Message;
+                }
+                finally
+                {
+                    Query.Dispose();
+                    StreamWriter?.Close();
+                }
+            }
+        }
+
+        public void ActionToStream(Stream stream, string cmd)
+        {
+            //IStreamResultWriter resultWriter = new JsonStreamResult();
+            lock (lockObj)
+            {
+                try
+                {
+                    //stream can be null
+                    StreamWriter.Open(stream);
+                    StreamWriter.PushObj();
+                    StreamWriter.WriteProp("cmd", cmd);
+                    //read out fields
+                    var outProps = Action(cmd);
+                    if (Query.Result != "Ok") throw new Exception(Query.Result);
+                    //write output parameters
+                    StreamWriter.PushObjProp("out");
+                    foreach (IDynaProp prop in outProps)
+                        prop.WriteProp(StreamWriter);
+                    StreamWriter.Pop();
+                    StreamWriter.WriteProp("message", Query.Result);
+                    StreamWriter.WriteProp("cmd_time", DateTime.Now.ToShortTimeString());
+                    StreamWriter.Pop();
+                    Result = Query.Result;
+                }
+                catch (Exception ex)
+                {
+                    Result = ex.Message;
+                }
+                finally
+                {
+                    Query.Dispose();
+                    StreamWriter?.Close();
                 }
             }
         }
@@ -494,6 +674,7 @@ namespace Kobdik.Dynamics
         {
             Query.Dispose();
         }
+
     }
 
     public class PropMap
@@ -558,7 +739,6 @@ namespace Kobdik.Dynamics
             sel_Maps = new List<PropMap>(dynaObject.PropDict.Count);
             list = new List<T>(1024);
             cached = false;
-            dbread = true;
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -607,9 +787,9 @@ namespace Kobdik.Dynamics
             foreach (var propMap in propMaps)
                 propMap.GetFromObject(t);
             //отправляем изменения и получаем результаты
-            var updProps = _dynaObject.Update();
+            var outProps = _dynaObject.Action("upd");
             //обновляем связанные свойства по полученным результатам
-            foreach (var propMap in propMaps.Where(bp => updProps.Contains(bp.Prop)))
+            foreach (var propMap in propMaps.Where(bp => outProps.Contains(bp.Prop)))
                 propMap.SetToObject(t);
         }
 
@@ -620,19 +800,18 @@ namespace Kobdik.Dynamics
             string result = "Reset";
             try
             {
+                i_current = -1;
+                dbread = false;
                 if (!cached)
                 {
                     _dataReader = _dynaObject.Select();
-                    sel_Maps.Clear();
-                    foreach (var propMap in propMaps.Where(pm => pm.Prop.Ordinal >= 0))
-                        sel_Maps.Add(propMap);
+                    if (_dataReader != null)
+                    {
+                        sel_Maps.Clear();
+                        foreach (var propMap in propMaps.Where(pm => pm.Prop.Ordinal >= 0)) sel_Maps.Add(propMap);
+                        dbread = true;
+                    }
                     cached = true;
-                    dbread = true;
-                }
-                else
-                {
-                    i_current = -1;
-                    dbread = false;
                 }
                 result = "Ok";
             }

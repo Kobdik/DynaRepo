@@ -5,9 +5,12 @@ using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
+using System.Text;
 using Kobdik.Common;
 using Kobdik.Dynamics;
+using Newtonsoft.Json;
 
 namespace Kobdik.DataModule
 {
@@ -153,7 +156,11 @@ namespace Kobdik.DataModule
                 dynaObject = new DynaObject(qryDef)
                 {
                     //Адаптер для работы с DB
-                    Query = new DbQuery(GetConnection(), key)
+                    Query = new DbQuery(GetConnection(), key),
+                    //Для чтения json-потока
+                    StreamReader = new JsonStreamReader(),
+                    //Для записи в json-поток
+                    StreamWriter = new JsonStreamWriter()
                 };
                 //загрузить описание параметров select-запроса
                 foreach (PamDef pamDef in pamList.Where(p => p.qry_id == qryDef.qry_id))
@@ -167,6 +174,188 @@ namespace Kobdik.DataModule
             }
         }
 
+    }
+
+    public class JsonStreamReader : IStreamReader
+    {
+        private JsonTextReader reader;
+        
+        //1-bin, 2-json, 3-xml
+        public byte GetStreamType() { return 2; }
+
+        public void Open(Stream stream)
+        {
+            TextReader textReader = new StreamReader(stream);
+            reader = new JsonTextReader(textReader);
+        }
+
+        public bool Read()
+        {
+            return (reader != null) ? reader.Read() : false;
+        }
+
+        public int TokenType()
+        {
+            return (reader != null) ? (int)reader.TokenType : 0;
+        }
+
+        public Type ReadType()
+        {
+            return (reader != null) ? reader.ValueType : null;
+        }
+
+        public string ReadString()
+        {
+            return (reader != null) ? reader.ReadAsString() : null;
+        }
+
+        public int? ReadInt()
+        {
+            return (reader != null) ? reader.ReadAsInt32() : null;
+        }
+
+        public DateTime? ReadDateTime()
+        {
+            return (reader != null) ? reader.ReadAsDateTime() : null;
+        }
+
+        public Decimal? ReadDecimal()
+        {
+            return (reader != null) ? reader.ReadAsDecimal() : null;
+        }
+
+        public object Value()
+        {
+            return (reader != null) ? reader.Value : null;
+        }
+
+        public void Close()
+        {
+            reader?.Close();
+        }
+
+    }
+
+    public class JsonStreamWriter : IStreamWriter, IPropWriter
+    {
+        private Stack<byte> stack;
+        private JsonTextWriter writer;
+        private StringBuilder builder;
+        private string result;
+        //1-bin, 2-json, 3-xml
+        public byte GetStreamType() { return 2; }
+
+        public void Open(Stream stream)
+        {
+            TextWriter textWriter = null;
+            if (stream == null)
+            {
+                builder = new StringBuilder();
+                textWriter = new StringWriter(builder);
+                result = "Open string writer..";
+            }
+            else
+            {
+                builder = null;
+                textWriter = new StreamWriter(stream);
+                result = "Open stream writer..";
+            }
+            writer = new JsonTextWriter(textWriter);
+            stack = new Stack<byte>();
+        }
+
+        public void PushArr()
+        {
+            writer.WriteStartArray();
+            stack.Push(1);
+        }
+
+        public void PushObj()
+        {
+            writer.WriteStartObject();
+            stack.Push(2);
+        }
+
+        public void PushArrProp(string propName)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteStartArray();
+            stack.Push(3);
+        }
+
+        public void PushObjProp(string propName)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteStartObject();
+            stack.Push(4);
+        }
+
+        public void Pop()
+        {
+            if (stack.Count == 0) return;
+            byte top = stack.Pop();
+            switch (top)
+            {
+                case 1: writer.WriteEndArray(); break;
+                case 2: writer.WriteEndObject(); break;
+                case 3: writer.WriteEndArray(); break;
+                case 4: writer.WriteEndObject(); break;
+            }
+        }
+
+        public void WriteProp(String propName, String value)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteValue(value);
+        }
+
+        public void WriteProp(String propName, Byte value)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteValue(value);
+        }
+
+        public void WriteProp(String propName, Int16 value)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteValue(value);
+        }
+
+        public void WriteProp(String propName, Int32 value)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteValue(value);
+        }
+
+        public void WriteProp(String propName, DateTime value)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteValue(value);
+        }
+
+        public void WriteProp(String propName, Double value)
+        {
+            writer.WritePropertyName(propName);
+            writer.WriteValue(value);
+        }
+
+        public void Close()
+        {
+            try
+            {
+                while (stack.Count > 0) Pop();
+                if (builder != null)
+                    result = builder.ToString();
+            }
+            catch (Exception) { }
+            finally
+            {
+                writer.Flush();
+                writer.Close();
+            }
+        }
+
+        public string Result => result;
     }
 
 }

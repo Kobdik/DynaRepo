@@ -51,7 +51,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\DynaLib\Kobdik.csproj">
+    <ProjectReference Include="..\DynaLib\DynaLib.csproj">
       <Project>{f5daebb8-0920-43a2-a201-f011b0094dfb}</Project>
       <Name>Kobdik</Name>
     </ProjectReference>

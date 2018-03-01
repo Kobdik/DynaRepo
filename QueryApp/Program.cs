@@ -71,14 +71,17 @@ namespace QueryApp
         static void Test2()
         {
             IDynaObject dynaObject = dataMod.GetDynaObject("Invoice");
-            //dynaObject.ParmDict["Dt_Fst"].Value = "2017.01.11";
+            //dynaObject.ParmDict["Dt_Fst"].Value = "2017.01.01";
             //dynaObject.ParmDict["Dt_Lst"].Value = "2017.01.11";
-            dynaObject.ParmDict["Dt_Fst"].Value = "2009.01.01";
-            dynaObject.ParmDict["Dt_Lst"].Value = "2017.07.01";
             long fst = DateTime.Now.Ticks;
-            using (FileStream fs = new FileStream("Invoice.json", FileMode.Create))
+            using (FileStream rfs = new FileStream("Invoice_Params.json", FileMode.Open))
             {
-                dynaObject.SelectToStream(fs);
+                //считываем параметры запроса из входного json-потока
+                dynaObject.ReadPropStream(rfs, "sel");
+            }
+            using (FileStream wfs = new FileStream("Invoice.json", FileMode.Create))
+            {
+                dynaObject.SelectToStream(wfs);
             }
             long lst = DateTime.Now.Ticks;
             long ts = lst - fst;
@@ -106,7 +109,7 @@ namespace QueryApp
             {
                 count++;
                 sum_gt += invo.Val;
-                //with Console - 101ms and without - 20ms ~ 312'534 tikcs
+                //with Console ~7'200'000 (720ms) ticks and without ~ 312'000 tikcs (31ms)
                 //Console.WriteLine("{0} {1} {2} {3} {4}", count, invo.Idn, invo.DtInvo, invo.Val, invo.Note);
             }
             long lst = DateTime.Now.Ticks;

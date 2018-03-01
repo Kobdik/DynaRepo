@@ -23,15 +23,15 @@ namespace LinqToEntityApp
                 long fst = DateTime.Now.Ticks;
                 
                 Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
-                var query = from nach in context.Invos
-                            where nach.Val > 0
-                            orderby nach.Dt_Invo
-                            select nach;
-                foreach (Invo invo in query) //.OrderBy(n => n.Dt_Nach).Select(n => new Nach(n.INN, n.Dt_Nach, n.Val)).ToList()
+                var query = from invo in context.Invos
+                            where invo.Val > 0
+                            orderby invo.Dt_Invo
+                            select invo;
+                foreach (Invo invo in query)
                 {
                     count++;
                     sum_gt += invo.Val;
-                    //with Console 539ms and without 328ms ~ 3'593'014 ticks
+                    //with Console ~10'000'000 (1s) and without ~ 3'600'000 ticks (360ms)
                     //Console.WriteLine("{0} {1} {2} {3} {4}", count, invo.Idn, invo.Dt_Invo, invo.Val, invo.Note);
                 }
                 long lst = DateTime.Now.Ticks;

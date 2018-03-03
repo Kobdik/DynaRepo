@@ -70,7 +70,6 @@ namespace Kobdik.Common
         IDataReader Select();
         IDataReader Detail(int idn);
         IDynaProp[] Action(string cmd);
-        IStreamWriter StreamWriter { get; set; }
         void SelectToStream(Stream stream);
         void DetailToStream(Stream stream, int idn);
         void ActionToStream(Stream stream, string cmd);

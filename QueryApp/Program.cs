@@ -71,8 +71,6 @@ namespace QueryApp
         static void Test2()
         {
             IDynaObject dynaObject = dataMod.GetDynaObject("Invoice");
-            //dynaObject.ParmDict["Dt_Fst"].Value = "2017.01.01";
-            //dynaObject.ParmDict["Dt_Lst"].Value = "2017.01.11";
             long fst = DateTime.Now.Ticks;
             using (FileStream rfs = new FileStream("Invoice_Params.json", FileMode.Open))
             {
@@ -93,8 +91,7 @@ namespace QueryApp
         static void Test3()
         {
             IDynaObject dynaObject = dataMod.GetDynaObject("InvoCut");
-            //dynaObject.ParmDict["Dt_Fst"].Value = "2009.01.01";
-            //dynaObject.ParmDict["Dt_Lst"].Value = "2017.12.31";
+            //запрос без параметров
             QueryInvo queryInvo = new QueryInvo(dynaObject);
             int count = 0;
             double sum_gt = 0;

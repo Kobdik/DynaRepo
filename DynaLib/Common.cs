@@ -6,8 +6,6 @@ using System.Threading;
 
 namespace Kobdik.Common
 {
-    public delegate void NotifyEvent(String message);
-
     public interface IPropWriter
     {
         void WriteProp(String propName, String value);
@@ -62,46 +60,23 @@ namespace Kobdik.Common
         string Result { get; }
     }
 
+    public interface IDynaCommand
+    {
+        IDataReader Select();
+        IDataReader Detail(int idn);
+        IDynaProp[] Action(string cmd);
+        string Result { get; }
+    }
+
     public interface IDynaObject : IDisposable
     {
         Dictionary<String, IDynaProp> ParmDict { get; }
         Dictionary<String, IDynaProp> PropDict { get; }
         void ReadPropStream(Stream stream, string cmd);
-        IDataReader Select();
-        IDataReader Detail(int idn);
-        IDynaProp[] Action(string cmd);
         void SelectToStream(Stream stream);
         void DetailToStream(Stream stream, int idn);
         void ActionToStream(Stream stream, string cmd);
-        string Result { get; }
         string GetInfo();
     }
-
-    #region DictDefinitions
-
-    public class QryDef
-    {
-        public byte qry_id, master, col_def;
-        public string qry_name, qry_head;
-        public byte qry_flags, col_flags;
-        public byte[] groups;
-    }
-
-    public class PamDef
-    {
-        public byte qry_id, pam_id, pam_type;
-        public string pam_name, def_val;
-        public short pam_size;
-    }
-
-    public class ColDef
-    {
-        public byte qry_id, col_id, col_type, look_qry, look_key, look_res;
-        public string col_name, col_head;
-        public short col_size;
-        public byte col_flags, ext_flags;
-    }
-
-    #endregion
 
 }

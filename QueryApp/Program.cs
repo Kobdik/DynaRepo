@@ -3,7 +3,6 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using Kobdik.Common;
-using Kobdik.Dynamics;
 using Kobdik.DataModule;
 
 namespace QueryApp

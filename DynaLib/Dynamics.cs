@@ -4,10 +4,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
-using System.Threading;
 using Kobdik.Common;
+using Kobdik.DataModule;
 
 namespace Kobdik.Dynamics
 {
@@ -337,7 +336,7 @@ namespace Kobdik.Dynamics
         }
     }
 
-    public class DynaObject : IDynaObject
+    public class DynaObject : IDynaObject, IDynaCommand
     {
         #region fields
         private string qry_name;
@@ -673,177 +672,6 @@ namespace Kobdik.Dynamics
         public void Dispose()
         {
             Query.Dispose();
-        }
-
-    }
-
-    public class PropMap
-    {
-        public IDynaProp Prop => dynaProp;
-        public MethodInfo GetMethod { get; set; }
-        public MethodInfo SetMethod { get; set; }
-        private object[] parameters;
-        private IDynaProp dynaProp;
-
-        public PropMap(IDynaProp prop)
-        {
-            dynaProp = prop;
-            parameters = new object[1];
-        }
-
-        public void ReadToObject(IDataReader reader, object obj)
-        {
-            dynaProp.ReadProp(reader);
-            if (SetMethod != null)
-            {
-                parameters[0] = dynaProp.Value;
-                SetMethod.Invoke(obj, parameters);
-            }
-        }
-
-        public void GetFromObject(object obj)
-        {
-            if (GetMethod != null)
-                dynaProp.Value = GetMethod.Invoke(obj, null);
-        }
-
-        public void SetToObject(object obj)
-        {
-            if (SetMethod != null)
-            {
-                parameters[0] = dynaProp.Value;
-                SetMethod.Invoke(obj, parameters);
-            }
-        }
-
-    }
-
-    public abstract class DynaQuery<T> : IEnumerable<T>, IEnumerator<T>, IEnumerable, IEnumerator
-    {
-        protected IDynaObject _dynaObject;
-        protected IDataReader _dataReader;
-        protected List<PropMap> propMaps;
-        protected List<PropMap> sel_Maps;
-        private List<T> list;
-        private T _current;
-        private Type _type;
-        private bool cached, dbread;
-        private int i_current;
-
-        public DynaQuery(IDynaObject dynaObject)
-        {
-            _dynaObject = dynaObject;
-            _current = Activator.CreateInstance<T>();
-            _type = _current.GetType();
-            propMaps = new List<PropMap>(dynaObject.PropDict.Count);
-            sel_Maps = new List<PropMap>(dynaObject.PropDict.Count);
-            list = new List<T>(1024);
-            cached = false;
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            //throw new NotImplementedException();
-            return ((IEnumerable<T>)this).GetEnumerator();
-        }
-
-        public IEnumerator<T> GetEnumerator()
-        {
-            Reset();
-            return this;
-        }
-
-        object IEnumerator.Current => _current;
-
-        public T Current => _current;
-
-        public void UpdateCurrent()
-        {
-            if (dbread)
-            {
-                _current = Activator.CreateInstance<T>();
-                foreach (var propMap in sel_Maps)
-                    propMap.ReadToObject(_dataReader, _current);
-                list.Add(_current);
-            }
-            else _current = list[i_current];
-        }
-
-        public bool MoveNext()
-        {
-            bool hasNext;
-            if (dbread)
-                hasNext = _dataReader.Read();
-            else
-                hasNext = list.Count > ++i_current;
-            //move ahead and update current
-            if (hasNext) UpdateCurrent();
-            return hasNext;
-        }
-
-        public void Update(T t)
-        {
-            //считываем связанные свойства в _dynaObject
-            foreach (var propMap in propMaps)
-                propMap.GetFromObject(t);
-            //отправляем изменения и получаем результаты
-            var outProps = _dynaObject.Action("upd");
-            //обновляем связанные свойства по полученным результатам
-            foreach (var propMap in propMaps.Where(bp => outProps.Contains(bp.Prop)))
-                propMap.SetToObject(t);
-        }
-
-        public abstract void OnReset(string message);
-
-        public void Reset()
-        {
-            string result = "Reset";
-            try
-            {
-                i_current = -1;
-                dbread = false;
-                if (!cached)
-                {
-                    _dataReader = _dynaObject.Select();
-                    if (_dataReader != null)
-                    {
-                        sel_Maps.Clear();
-                        foreach (var propMap in propMaps.Where(pm => pm.Prop.Ordinal >= 0)) sel_Maps.Add(propMap);
-                        dbread = true;
-                    }
-                    cached = true;
-                }
-                result = "Ok";
-            }
-            catch (Exception ex)
-            {
-                result = ex.Message;
-            }
-            OnReset(result);
-        }
-
-        public void MapToCurrent(string dynaPropName, string currPropName)
-        {
-            PropertyInfo info = _type.GetProperty(currPropName);
-            if (info == null || !_dynaObject.PropDict.ContainsKey(dynaPropName)) return;
-            IDynaProp prop = _dynaObject.PropDict[dynaPropName];
-            if (prop.GetPropType() != info.PropertyType) return;
-            propMaps.Add(new PropMap(prop)
-            {
-                GetMethod = info.GetGetMethod(),
-                SetMethod = info.GetSetMethod()
-            });
-        }
-
-        public void ResetCache()
-        {
-            list.Clear();
-            cached = false;
-        }
-
-        public void Dispose()
-        {
-            _dynaObject.Dispose();
         }
 
     }

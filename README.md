@@ -100,7 +100,7 @@ return 0;
 
 На стороне контроллера объекты `DynaObject` доступны через реализуемый ими интерфейс `IDynaObject`: 
 ```csharp
-//Через члены интерфейса удобнее и 
+//Через интерфейс удобнее и 
 //безопаснее работать с объектом
 public interface IDynaObject : IDisposable
 {
@@ -222,8 +222,7 @@ private static void Test1()
   lst = DateTime.Now.Ticks;
   ts = lst - fst;
   // Time ~150'000 ticks
-  Console.WriteLine("Done 1. Count={0}, Sum={1}. Time elapsed {2}", 
-   count, sum_gt, ts);
+  Console.WriteLine("Done 1. Count={0}, Sum={1}. Time elapsed {2}", count, sum_gt, ts);
   //Пример группирующего запроса
   fst = DateTime.Now.Ticks;
   var groupQuery = 
@@ -263,7 +262,7 @@ dynaObject.ParmDict["Dt_Lst"].Value = "2017.07.01";
 
 Тесты с замерами производительности DynaObject находятся в QueryApp. В данных примерах dataMod создает экземпляры dynaObject, настроенные на использование SqlConnection и чтение/запись в json формате.
 
-Пример стандартного применения без создания объектов модели `Invo`
+Пример стандартного применения `DynaObject` без создания объектов модели `Invo`
 ```csharp
 static void Test2()
 {
@@ -272,11 +271,11 @@ static void Test2()
  //чем в таблице T_InvoCut, с которой работает `EF`
  using (FileStream rfs = new FileStream("Invoice_Params.json", FileMode.Open))
  {
-  //считываем параметры запроса из входного json-потока
+  //считываем параметры из входного потока
   dynaObject.ReadPropStream(rfs, "sel");
  }
  long fst = DateTime.Now.Ticks;
- //исполним запрос и запишем результат в файловый поток
+ //исполним запрос, результат пишем в файловый поток
  using (FileStream fs = new FileStream("Invoice.json", FileMode.Create))
  {
   dynaObject.SelectToStream(fs);
@@ -318,8 +317,7 @@ static void Test3()
  }
  long lst = DateTime.Now.Ticks;
  long ts = lst - fst;
- Console.WriteLine("Done 0. Count={0}, Sum={1}. Time elapsed {2} ticks.", 
-  count, sum_gt, ts);
+ Console.WriteLine("Done 0. Count={0}, Sum={1}. Time elapsed {2} ticks.", count, sum_gt, ts);
  Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
  //Запрос по кэшированным данным
  count = 0;
@@ -333,8 +331,7 @@ static void Test3()
  lst = DateTime.Now.Ticks;
  ts = lst - fst;
  // Time ~0 ticks
- Console.WriteLine("Done 1. Count={0}, Sum={1}. Time elapsed {2}", 
-  count, sum_gt, ts);
+ Console.WriteLine("Done 1. Count={0}, Sum={1}. Time elapsed {2}", count, sum_gt, ts);
 
  fst = DateTime.Now.Ticks;
  //IGrouping<int, <Invo>>

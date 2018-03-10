@@ -1,6 +1,6 @@
 ## DynaObject
 
-Класс `DynaObject` служит адаптером к таблице на стороне БД, вызывая хранимые процедуры `select, detail, insert, update`. Для создания объектов `DynaObject` используется фабричный метод `IDynaObject DataMod.GetDynaObject(string queryName)`. Singleton экземпляр DataMod при инициализации загружает всю необходимую мета-информацию из БД, используемую при создании объектов, а также снабжает их `binary`, `json` или `xml` форматтерами для записи и чтения из потоков.
+Класс `DynaObject` служит адаптером к таблице на стороне БД, вызывая хранимые процедуры `select, detail, insert, update`. Для создания объектов `DynaObject` используется фабричный метод GetDynaObject(string queryName) singleton экземпляра DataMod, который при инициализации загружает необходимые мета-данные из БД, чтобы потом снабдить ими создаваемые объекты, а также устанавливаетет им `binary`, `json` или `xml` форматтеры для записи и чтения из потоков.
 
 Посмотрите исходные коды в модуле [DynaLib/Dynamics](https://github.com/Kobdik/DynaRepo/blob/master/DynaLib/Dynamics.cs).
 
@@ -22,7 +22,7 @@ public interface IDynaProp
  Object Value { get; set; }
 }
 ```
-Первые пять членов и свойство Value интерфейса позволяют точно указать параметры хранимых процедур при создании `IDbCommand`. Свойство Ordinal сразу после исполнения select-запроса получает значение индекса колонки в `IDataReader`, что позволяет эффективно читать значения поля из результатов запроса. Метод `WriteProp(IDataRecord record, IPropWriter writer)` читает из `IDataReader : IDataRecord` и сразу пишет в выходной поток.
+Первые пять членов и свойство *Value* интерфейса позволяют точно указать параметры хранимых процедур при создании `IDbCommand`. Свойство *Ordinal* сразу после исполнения select-запроса получает значение индекса колонки в `IDataReader`, что позволяет эффективно читать значения поля из результатов запроса. Метод *WriteProp(IDataRecord record, IPropWriter writer)* читает из `IDataReader : IDataRecord` и сразу пишет в выходной поток.
 
 На сегодня реализованы следующие *sealed* классы, реализующие `IDynaProp` - это StringProp, ByteProp, Int16Prop, Int32Prop, DateProp, DoubleProp. Каждый из них переопределяет виртуальные методы чтения и записи.
 
@@ -38,7 +38,7 @@ public interface IPropWriter
  void WriteProp(String propName, Double value);
 }
 ```
-Реализация записи в поток отделена от `DynaObject` через объявление свойства-интерфейса `StreamWriter : IStreamWriter`.
+Реализация записи в поток отделена от `DynaObject` через объявление свойства-интерфейса *StreamWriter : IStreamWriter*.
 ```csharp
 public interface IStreamWriter : IPropWriter
 {
@@ -53,23 +53,23 @@ public interface IStreamWriter : IPropWriter
  string Result { get; }
 }
 ```
-Методы интерфейса позволяют единообразно, в единой логической структуре, формировать ответ клиенту в json, xml или binary форматах. Например, при вызове `SelectToStream(Stream stream)` 
-1. Инициализируем `StreamWriter` на основе выходного потока
+Методы интерфейса позволяют единообразно, в единой логической структуре, формировать ответ клиенту в json, xml или binary форматах. Например, при вызове *SelectToStream(Stream stream)* 
+1. Инициализируем *StreamWriter* на основе выходного потока
 2. Погружаемся в контекст неименованного объекта
 3. Погружаемся в контекст именнованного в "selected" свойства-массива
 4. Запоминаем текущее время и исполняем запрос
 5. Получив `IDataReader`, в цикле читаем записи
 6. Погружаемся в неименованный контекст объекта каждой записи
-7. `WriteRecord` вызывает на задействованных `IDynaProp` метод WriteProp
+7. *WriteRecord* вызывает на задействованных `IDynaProp` метод *WriteProp*
 8. Выходим из контекста неименованного объекта
 9. Закрываем `IDataReader`
 10. Сравнивая текущее время и запомненное в начале вычисляем время работы
 11. Выходим из контекста именованного массива
-12. Пишем в именнованное свойство "message" сообщение от Query
+12. Пишем в именнованное свойство "message" сообщение от *Query*
 13. Пишем в именнованное свойство "sel_time" время записи
 14. Пишем в именнованное свойство "time_ms" длительность записи
 15. Выходим из контекста неименованного объекта
-16. Закрываем `StreamWriter`
+16. Закрываем *StreamWriter*
 ```
  StreamWriter.Open(stream);
  StreamWriter.PushObj();
@@ -95,9 +95,9 @@ public interface IStreamWriter : IPropWriter
  StreamWriter.Pop();
  StreamWriter?.Close();
 ```
-На выходе получаем json-файл следующего вида, где {...} - сокращение для строк:
-```json
-{"selected":[{...},{...},{...}],"message":"Ok","sel_time":"11:19","time_ms":15}
+На выходе получаем json-файл следующего вида, где {row} - сокращение для записи строк:
+```
+{"selected":[{row},{row},{row}],"message":"Ok","sel_time":"11:19","time_ms":15}
 ```
 
 

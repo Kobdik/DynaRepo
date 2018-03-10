@@ -11,15 +11,11 @@ private static void Test1J()
   long fst = DateTime.Now.Ticks;
   //Первоначальная загрузка из БД
   Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
-  var query = from invoice in context.Invoices
-      where invoice.Val > 0
-      orderby invoice.Dt_Invo
-      select invoice;
   //Лучшее время 4'654'000 ticks
   using (FileStream wfs = new FileStream("InvoiceEF.json", FileMode.Create))
   {
    DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(IEnumerable<Invoice>));
-   ser.WriteObject(wfs, query);
+   ser.WriteObject(wfs, context.Invoices);
   }
   long lst = DateTime.Now.Ticks;
   long ts = lst - fst;
@@ -28,7 +24,18 @@ private static void Test1J()
  }
 }
 ```
-Пример стандартного применения `DynaObject` без создания объектов модели `Invoice`
+Для тестирования `DynaObject` используем файловые потоки ввода-вывода. 
+
+Входные параметры могут загружаться из Invoice_Params.json
+```json
+{"Dt_Fst":"2009.01.01", "Dt_Lst":"2017.07.01"}
+```
+Что равносильно заданию параметров в коде
+```csharp
+dynaObject.ParmDict["Dt_Fst"].Value = "2009.01.01";
+dynaObject.ParmDict["Dt_Lst"].Value = "2017.07.01";
+```
+Пример стандартного применения `DynaObject` без создания объектов модели `Invoice`.
 ```csharp
 static void Test2()
 {
@@ -52,8 +59,9 @@ static void Test2()
  Console.WriteLine("Total time elapsed {0}", ts); 
 }
 ```
-Надо будет замерить, сколько времени потребуется `EF` для выборки и сериализации коллекции объектов модели в поток.
+Оба запроса обращаются к таблице *dbo.T_Invoice*, в которой 4569 записей. Общая производительность `DynaLib` в 7.43 раза выше. Чуть позже дам оценку скорости сериализации `EF` коллекции объектов модели.
 
+Проведем трех-этапный тест `EF`. В первую очередь нас интересует скорость чтения данных из БД без вывода в консоль при первоначальной загрузке данных. В данном случае лучший результат составил 3'125'000 ticks, около 312 ms.
 ```csharp
 private static void Test1()
 {
@@ -94,7 +102,7 @@ private static void Test1()
   }
   lst = DateTime.Now.Ticks;
   ts = lst - fst;
-  // Time ~150'000 ticks
+  //Время ~150'000 ticks
   Console.WriteLine("Done 1. Count={0}, Sum={1}. Time elapsed {2}", count, sum_gt, ts);
   //Пример группирующего запроса
   fst = DateTime.Now.Ticks;
@@ -114,27 +122,17 @@ private static void Test1()
   lst = DateTime.Now.Ticks;
   ts = lst - fst;
   //Лучшее время ~468'000 ticks, 
-  //Memory ~7'265'648
+  //Память ~7'265'648 Mb
   Console.WriteLine("Done 2. Time elapsed {0}.", ts);
   Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
  }
 }
 ```
 
-Для тестирования `DynaObject` используем файловые потоки ввода-вывода. 
-Например, входные параметры могут загружаться из Invoice_Params.json
-```json
-{"Dt_Fst":"2009.01.01", "Dt_Lst":"2017.07.01"}
-```
-Что равносильно заданию параметров в коде
-```csharp
-dynaObject.ParmDict["Dt_Fst"].Value = "2009.01.01";
-dynaObject.ParmDict["Dt_Lst"].Value = "2017.07.01";
-```
 
 Тесты с замерами производительности DynaObject находятся в QueryApp. В данных примерах dataMod создает экземпляры dynaObject, настроенные на использование SqlConnection и чтение/запись в json формате.
 
-В ближайшее время сделаю, а пока продолжим замеры с классом `QueryInvo : DynaQuery<Invo>`.
+Продолжим замеры с классом `QueryInvo : DynaQuery<Invo>`.
 
 ```csharp
 static void Test3()

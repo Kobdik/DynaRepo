@@ -49,3 +49,6 @@ using Kobdik.DataModule;
   dynaObject.SelectToStream(fs);
  }
 ```
+Файл параметров и результирующая выборка находятся в каталоге [QueryApp](https://github.com/Kobdik/DynaRepo/tree/master/QueryApp)
+
+Подробнее о работе с `LINQ to Objects` на основе обобщенного класса `DynaQuery<T>`, замеры производительности в сравнении с `LINQ to EF` смотрите в описании [DynaLib](https://github.com/Kobdik/DynaRepo/edit/master/docs/Index.md)

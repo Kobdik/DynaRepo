@@ -1,6 +1,6 @@
 ## DynaObject
 
-Класс `DynaObject` служит адаптером к таблице на стороне БД, вызывая хранимые процедуры `select, detail, insert, update`. Для создания объектов `DynaObject` используется фабричный метод GetDynaObject(string queryName) singleton экземпляра DataMod, который при инициализации загружает необходимые мета-данные из БД, чтобы потом снабдить ими создаваемые объекты, а также устанавливаетет им `binary`, `json` или `xml` форматтеры для записи и чтения из потоков.
+Класс `DynaObject` служит адаптером к таблице на стороне БД, вызывая хранимые процедуры *select, detail, insert, update*. Для создания объектов `DynaObject` используется фабричный метод *GetDynaObject(string queryName)* singleton экземпляра `DataMod`, который при инициализации загружает необходимые мета-данные из БД, чтобы потом снабдить ими создаваемые объекты, а также устанавливаетет им *binary, json, xml* форматтеры для записи и чтения из потоков.
 
 Посмотрите исходные коды в модуле [DynaLib/Dynamics](https://github.com/Kobdik/DynaRepo/blob/master/DynaLib/Dynamics.cs).
 
@@ -99,12 +99,12 @@ public interface IStreamWriter : IPropWriter
 ```
 {"selected":[{row},{row},{row}],"message":"Ok","sel_time":"11:19","time_ms":15}
 ```
+В настоящее время в библиотеке имеются только json-реализации для записи - `JsonStreamWriter : IStreamWriter` и чтения - `JsonStreamReader : IStreamReader`. Следующими будут binary-реализации, а уже потом - xml.
 
-
-На стороне контроллера объекты `DynaObject` доступны через реализуемый ими интерфейс `IDynaObject`: 
+Методы `DynaObject` доступны через реализуемый им интерфейс `IDynaObject`. За пределами библиотеки, например, на стороне контроллера WEB API приложения старайтесь обходиться доступом через методы интерфейса.
 ```csharp
 //Через интерфейс удобнее и 
-//безопаснее работать с объектом
+//безопаснее работать с объектом.
 public interface IDynaObject : IDisposable
 {
  //описания параметров select-запроса
@@ -119,7 +119,8 @@ public interface IDynaObject : IDisposable
  void DetailToStream(Stream stream, int idn);
  void ActionToStream(Stream stream, string cmd);
  //Служит для целей отладки, возвращает
- //имена и значения колонок PropDict
- string GetInfo();
+ //имена и значения колонок PropDict, но также
+ //можно сгенерировать объявления хранимых процедур
+ string GetInfo(string kind);
 }
 ```

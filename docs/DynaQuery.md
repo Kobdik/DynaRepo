@@ -30,6 +30,7 @@ public class QueryInvo : DynaQuery<Invo>
 
  public override void OnReset(string message)
  {
+  //отладочная информация
   Console.WriteLine(message);
  }
 }
@@ -53,4 +54,4 @@ public class QueryInvo : DynaQuery<Invo>
   Console.WriteLine("{0} {1} {2} {3}", invo.Idn, invo.DtInvo, invo.Val, invo.Note);
  }
 ```
-Заметьте, что в данном случае в `dynaObject` колонок оказалось больше, чем открытых свойств `Invo`, что не мешает загрузке данных в `List<Invo>`.
+Заметьте, что в данном случае в `dynaObject` колонок полей больше, чем свойств `Invo`, что не мешает загрузке данных в `List<Invo>`.

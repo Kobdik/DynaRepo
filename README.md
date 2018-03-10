@@ -12,7 +12,7 @@
 
 Для ознакомления скачайте БД (SQL Server 2012, LocalDB) из каталога Loc_Db. Организация словарей метаданных в форме таблиц описаний позволяет эффективно управлять запросами на основе хранимых процедур, унифицирует и упрощает обработку данных, способствует применению декларативного стиля программирования. Подробнее тут: [Dictionary First](https://github.com/Kobdik/DynaRepo/blob/master/docs/Dictionary.md)
 
-# DynaObject
+# Использование DynaObject
 
 Использование объектов `DynaObject` на примере запроса Invoice. В своем проекте добавьте ссылку на библиотеку `DynaLib`, затем добавьте пространства имен.
 ```csharp
@@ -49,6 +49,34 @@ using Kobdik.DataModule;
   dynaObject.SelectToStream(fs);
  }
 ```
+В моем действующем WEB API приложении параметры приходят в теле post-запроса, что позволяет избежать привязки моделей. Более того, не нужно создавать отдельный контроллер под каждый тип запроса. Достаточно одного контроллера c 4-5 точками входа, обрабатывающего запросы в стиле RPC. Вот пример фрагмента из *WebApiConfig.cs*
+```
+config.Routes.MapHttpRoute(
+ name: "DynaInit",
+ routeTemplate: "api/Dyna/init",
+ //no query parameters
+ defaults: new { controller = "Dyna", action = "Init" }
+);
+
+config.Routes.MapHttpRoute(
+ name: "DynaSelect",
+ routeTemplate: "api/Dyna/sel/{qry}",
+ defaults: new { controller = "Dyna", action = "SelectJson" }
+);
+
+config.Routes.MapHttpRoute(
+ name: "DynaDetail",
+ routeTemplate: "api/Dyna/get/{qry}/{idn}", 
+ defaults: new { controller = "Dyna", action = "DetailJson" }
+);
+
+config.Routes.MapHttpRoute(
+ name: "DynaAction",
+ routeTemplate: "api/Dyna/{cmd}/{qry}",
+ defaults: new { controller = "Dyna", action = "ActionJson" }
+);
+```
+
 Файл параметров и результирующая выборка находятся в каталоге [QueryApp](https://github.com/Kobdik/DynaRepo/tree/master/QueryApp)
 
 Подробнее об устройстве [DynaObject](https://github.com/Kobdik/DynaRepo/blob/master/docs/DynaObject.md).

@@ -51,4 +51,8 @@ using Kobdik.DataModule;
 ```
 Файл параметров и результирующая выборка находятся в каталоге [QueryApp](https://github.com/Kobdik/DynaRepo/tree/master/QueryApp)
 
-Подробнее о [DynaObject](https://github.com/Kobdik/DynaRepo/blob/master/docs/DynaObject.md), о запросах `LINQ to Objects` на основе обобщенного класса [DynaQuery<T>](https://github.com/Kobdik/DynaRepo/blob/master/docs/DynaQuery.md), замеры производительности в сравнении с `LINQ to EF` [Challenge](https://github.com/Kobdik/DynaRepo/blob/master/docs/Challenge.md)
+Подробнее об устройстве [DynaObject](https://github.com/Kobdik/DynaRepo/blob/master/docs/DynaObject.md).
+
+О запросах `LINQ to Objects` на основе обобщенного класса [DynaQuery](https://github.com/Kobdik/DynaRepo/blob/master/docs/DynaQuery.md).
+
+Замеры производительности в сравнении с `LINQ to EF` [Challenge](https://github.com/Kobdik/DynaRepo/blob/master/docs/Challenge.md).

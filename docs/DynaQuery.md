@@ -60,4 +60,4 @@ public class QueryInvo : DynaQuery<Invo>
 ```
 Заметьте, что в данном случае в *dynaObject* колонок полей больше, чем свойств `Invo`, но `QueryInvo` загружает данные на пересечении свойств. Замеры производительности показывают, что скорость исполнения *LINQ to Objects* запросов по кэшированным данным у `DynaQuery<T>` в полтора раза выше, чем у `EF`. Кроме того, переменная составляющая, характеризующая в том числе затраты времени на рефлексию свойств при загрузке данных из БД, в 2.66 раза меньше, чем у `EF`.
 
-Замеры производительности в сравнении с LINQ to [EF Challenge](https://github.com/Kobdik/DynaRepo/blob/master/docs/Challenge.md).
+Замеры производительности в сравнении с LINQ to EF приведены тут: [Challenge](https://github.com/Kobdik/DynaRepo/blob/master/docs/Challenge.md).

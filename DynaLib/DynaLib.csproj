@@ -7,7 +7,7 @@
     <ProjectGuid>{F5DAEBB8-0920-43A2-A201-F011B0094DFB}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>DynaLib</RootNamespace>
+    <RootNamespace>Kobdik</RootNamespace>
     <AssemblyName>DynaLib</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>

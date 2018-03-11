@@ -535,6 +535,15 @@ namespace Kobdik.DataModule
             OnReset(result);
         }
 
+        public void AutoMapProps(int flags)
+        {
+            foreach (var pair in _dynaObject.PropDict)
+            {
+                IDynaProp prop = pair.Value;
+                if ((prop.GetFlags() & flags) > 0) MapToCurrent(pair.Key, pair.Key);
+            }
+        }
+
         public void MapToCurrent(string dynaPropName, string currPropName)
         {
             PropertyInfo info = _type.GetProperty(currPropName);

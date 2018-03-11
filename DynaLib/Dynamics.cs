@@ -383,7 +383,7 @@ namespace Kobdik.Dynamics
                     prop = new StringProp(pamDef.pam_name, DbType.String, pamDef.pam_size, 0);
                     break;
                 case 175: //char[]->varchar
-                    prop = new StringProp(pamDef.pam_name, DbType.String, pamDef.pam_size, 0);
+                    prop = new StringProp(pamDef.pam_name, DbType.StringFixedLength, pamDef.pam_size, 0);
                     break;
                 case 48: //byte
                     prop = new ByteProp(pamDef.pam_name, DbType.Byte, pamDef.pam_size, 0);
@@ -396,6 +396,9 @@ namespace Kobdik.Dynamics
                     break;
                 case 40: //date
                     prop = new DateProp(pamDef.pam_name, DbType.Date, pamDef.pam_size, 0);
+                    break;
+                case 61: //datetime
+                    prop = new DateProp(pamDef.pam_name, DbType.DateTime, pamDef.pam_size, 0);
                     break;
                 case 62: //double
                     prop = new DoubleProp(pamDef.pam_name, DbType.Double, pamDef.pam_size, 0);
@@ -413,7 +416,7 @@ namespace Kobdik.Dynamics
                     prop = new StringProp(colDef.col_name, DbType.String, colDef.col_size, colDef.col_flags);
                     break;
                 case 175: //char[]->varchar
-                    prop = new StringProp(colDef.col_name, DbType.String, colDef.col_size, colDef.col_flags);
+                    prop = new StringProp(colDef.col_name, DbType.StringFixedLength, colDef.col_size, colDef.col_flags);
                     break;
                 case 48: //byte
                     prop = new ByteProp(colDef.col_name, DbType.Byte, colDef.col_size, colDef.col_flags);
@@ -426,6 +429,9 @@ namespace Kobdik.Dynamics
                     break;
                 case 40: //date
                     prop = new DateProp(colDef.col_name, DbType.Date, colDef.col_size, colDef.col_flags);
+                    break;
+                case 61: //datetime
+                    prop = new DateProp(colDef.col_name, DbType.DateTime, colDef.col_size, colDef.col_flags);
                     break;
                 case 62: //double
                     prop = new DoubleProp(colDef.col_name, DbType.Double, colDef.col_size, colDef.col_flags);
@@ -543,7 +549,7 @@ namespace Kobdik.Dynamics
                     TimeSpan ts = lst - fst;
                     StreamWriter.Pop();
                     StreamWriter.WriteProp("message", Query.Result);
-                    StreamWriter.WriteProp("sel_time", DateTime.Now.ToShortTimeString());
+                    StreamWriter.WriteProp("sel_time", lst.ToShortTimeString());
                     StreamWriter.WriteProp("time_ms", ts.Milliseconds);
                     StreamWriter.Pop();
                     Result = Query.Result;
@@ -655,18 +661,237 @@ namespace Kobdik.Dynamics
             }
         }
 
-        public string GetInfo()
+        private string GetParmsInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("Id: {0}, Name: {1}\n", qry_id, qry_name);
+            foreach (var pair in ParmDict)
+            {
+                IDynaProp prop = pair.Value;
+                sb.AppendFormat("Parm: {0}, Value: {1}\n", pair.Key, prop.Value);
+            }
+            sb.AppendFormat("Result: {0}\n", Result);
+            return sb.ToString();
+        }
+
+        private string GetPropsInfo()
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendFormat("Id: {0}, Name: {1}\n", qry_id, qry_name);
             foreach (var pair in PropDict)
             {
-                //sb.AppendLine(key);
                 IDynaProp prop = pair.Value;
                 sb.AppendFormat("Prop: {0}, Value: {1}\n", pair.Key, prop.Value);
             }
             sb.AppendFormat("Result: {0}\n", Result);
             return sb.ToString();
+        }
+
+        private string GetColDef(IDynaProp prop)
+        {
+            string result = "";
+            switch (prop.GetDbType())
+            {
+                case DbType.String: //varchar
+                    result = String.Format("\t{0} varchar({1}) NOT NULL, ", prop.GetName(), prop.GetSize());
+                    break;
+                case DbType.StringFixedLength: //char
+                    result = String.Format("\t{0} char({1}) NOT NULL, ", prop.GetName(), prop.GetSize());
+                    break;
+                case DbType.Byte: //byte
+                    result = String.Format("\t{0} tinyint NOT NULL, ", prop.GetName());
+                    break;
+                case DbType.Int16: //int16
+                    result = String.Format("\t{0} smallint {1} NOT NULL, ", prop.GetName(), (prop.GetFlags() & 1) > 0 ? "IDENTITY(1,1)" : "");
+                    break;
+                case DbType.Int32: //int32          
+                    result = String.Format("\t{0} int {1} NOT NULL, ", prop.GetName(), (prop.GetFlags() & 1) > 0 ? "IDENTITY(1,1)" : "");
+                    break;
+                case DbType.Double: //double
+                    result = String.Format("\t{0} float NOT NULL, ", prop.GetName());
+                    break;
+                case DbType.Date: //date
+                    result = String.Format("\t{0} date NOT NULL, ", prop.GetName());
+                    break;
+                case DbType.DateTime: //datetime
+                    result = String.Format("\t{0} datetime NOT NULL, ", prop.GetName());
+                    break;
+            }
+            return result;
+        }
+
+        private string GetVarDef(IDynaProp prop)
+        {
+            string result = "";
+            string str_out = (prop.GetFlags() & 8) > 0 ? " out" : "";
+            switch (prop.GetDbType())
+            {
+                case DbType.String: //varchar
+                    result = String.Format("@{0} varchar({1}){2}, ", prop.GetName(), prop.GetSize(), str_out);
+                    break;
+                case DbType.StringFixedLength: //char
+                    result = String.Format("@{0} char({1}){2}, ", prop.GetName(), prop.GetSize(), str_out);
+                    break;
+                case DbType.Byte: //byte
+                    result = String.Format("@{0} tinyint{1}, ", prop.GetName(), str_out);
+                    break;
+                case DbType.Int16: //int16
+                    result = String.Format("@{0} smallint{1}, ", prop.GetName(), str_out);
+                    break;
+                case DbType.Int32: //int32          
+                    result = String.Format("@{0} int{1}, ", prop.GetName(), str_out);
+                    break;
+                case DbType.Double: //double
+                    result = String.Format("@{0} float{1}, ", prop.GetName(), str_out);
+                    break;
+                case DbType.Date: //date
+                    result = String.Format("@{0} date{1}, ", prop.GetName(), str_out);
+                    break;
+                case DbType.DateTime: //datetime
+                    result = String.Format("@{0} datetime{1}, ", prop.GetName(), str_out);
+                    break;
+            }
+            return result;
+        }
+
+        private string GetCreateInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("CREATE TABLE dbo.T_{0}(\n", qry_name);
+            //выбрать только поля с установленными флагами
+            var props = PropDict.Values.Where(p => p.GetFlags() > 0);
+            foreach (var prop in props)
+                sb.AppendLine(GetColDef(prop));
+            //убрать запятую в конце
+            sb[sb.Length - 2] = ' ';
+            sb[sb.Length - 1] = '\n';
+            sb.AppendFormat(" CONSTRAINT [PK_T_{0}] PRIMARY KEY CLUSTERED ( [Idn] ASC )\n", qry_name);
+            sb.AppendLine(") ON [PRIMARY]");
+            return sb.ToString();
+        }
+
+        private string GetSelectInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("CREATE PROC dbo.sel_{0}\n", qry_name);
+            if (ParmDict.Count > 0)
+            {
+                var parms = ParmDict.Values;
+                foreach (var parm in parms)
+                    sb.Append(GetVarDef(parm));
+                //убрать запятую в конце
+                sb[sb.Length - 2] = ' ';
+                sb[sb.Length - 1] = '\n';
+            }
+            sb.AppendLine("AS");
+            sb.Append("SELECT ");
+            //выбрать только idn|sel поля
+            var props = PropDict.Values.Where(p => (p.GetFlags() & 3) > 0);
+            foreach (var prop in props)
+                sb.AppendFormat("{0}, ", prop.GetName());
+            //убрать запятую в конце 
+            sb[sb.Length - 2] = ' ';
+            sb[sb.Length - 1] = '\n';
+            sb.AppendFormat("FROM dbo.T_{0}\n", qry_name);
+            if (ParmDict.Count > 0)
+            {
+                var parms = ParmDict.Values;
+                //добавить закомментированными
+                sb.Append("--WHERE ");
+                foreach (var parm in parms)
+                    sb.AppendFormat("{0}=@{0}, ", parm.GetName());
+                //убрать запятую в конце
+                sb[sb.Length - 2] = ' ';
+                sb[sb.Length - 1] = '\n';
+            }
+            sb.AppendLine("RETURN 0;");
+            return sb.ToString();
+        }
+
+        private string GetDetailInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            string pt = (PropDict["Idn"].GetDbType() == DbType.Int16) ? "smallint" : "int";
+            sb.AppendFormat("CREATE PROC dbo.det_{0} @Idn {1}\n", qry_name, pt);
+            sb.AppendLine("AS");
+            sb.Append("SELECT ");
+            //выбрать только idn|sel поля
+            var props = PropDict.Values.Where(p => (p.GetFlags() & 3) > 0);
+            foreach (var prop in props)
+                sb.AppendFormat("{0}, ", prop.GetName());
+            //убрать запятую в конце 
+            sb[sb.Length - 2] = ' ';
+            sb[sb.Length - 1] = '\n';
+            sb.AppendFormat("FROM dbo.T_{0}\n", qry_name);
+            sb.AppendLine("WHERE Idn=@Idn");
+            sb.AppendLine("RETURN 0;");
+            return sb.ToString();
+        }
+
+        private string GetInsertInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("CREATE PROC dbo.ins_{0}\n", qry_name);
+            var actProps = PropDict.Values.Where(p => (p.GetFlags() & 45) > 0);
+            foreach (var prop in actProps)
+                sb.Append(GetVarDef(prop));
+            //убрать запятую в конце
+            sb[sb.Length - 2] = ' ';
+            sb[sb.Length - 1] = '\n';
+            sb.AppendLine("AS");
+            sb.AppendFormat("INSERT INTO dbo.T_{0} (", qry_name);
+            foreach (var prop in actProps.Skip(1))
+                sb.AppendFormat("{0}, ", prop.GetName());
+            //убрать запятую в конце 
+            sb[sb.Length - 2] = ')';
+            sb.Append("\nVALUES (");
+            foreach (var prop in actProps.Skip(1))
+                sb.AppendFormat("@{0}, ", prop.GetName());
+            //убрать запятую в конце 
+            sb[sb.Length - 2] = ')';
+            sb[sb.Length - 1] = '\n';
+            string pt = (PropDict["Idn"].GetDbType() == DbType.Int16) ? "smallint" : "int";
+            sb.AppendFormat("SET @Idn=CAST(IDENT_CURRENT('dbo.T_{0}') AS {1})\n", qry_name, pt);
+            sb.AppendLine("RETURN 0;");
+            return sb.ToString();
+        }
+
+        private string GetUpdateInfo()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("CREATE PROC dbo.upd_{0}\n", qry_name);
+            var actProps = PropDict.Values.Where(p => (p.GetFlags() & 45) > 0);
+            foreach (var prop in actProps)
+                sb.Append(GetVarDef(prop));
+            //убрать запятую в конце
+            sb[sb.Length - 2] = ' ';
+            sb[sb.Length - 1] = '\n';
+            sb.AppendLine("AS");
+            sb.AppendFormat("UPDATE dbo.T_{0} SET\n", qry_name);
+            foreach (var prop in actProps.Skip(1))
+                sb.AppendFormat("{0}=@{0}, ", prop.GetName());
+            //убрать запятую в конце 
+            sb[sb.Length - 2] = ' ';
+            sb[sb.Length - 1] = '\n';
+            sb.AppendLine("WHERE Idn=@Idn");
+            sb.AppendLine("RETURN 0;");
+            return sb.ToString();
+        }
+
+        public string GetInfo(string kind)
+        {
+            string result = "";
+            switch (kind)
+            {
+                case "parms": result = GetParmsInfo(); break;
+                case "props": result = GetPropsInfo(); break;
+                case "create": result = GetCreateInfo(); break;
+                case "select": result = GetSelectInfo(); break;
+                case "detail": result = GetDetailInfo(); break;
+                case "insert": result = GetInsertInfo(); break;
+                case "update": result = GetUpdateInfo(); break;
+            }
+            return result;
         }
 
         public void Dispose()

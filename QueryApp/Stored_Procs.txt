@@ -1,31 +1,46 @@
-create proc dbo.sel_Invoice
+CREATE TABLE dbo.T_Invoice(
+	Idn int IDENTITY(1,1) NOT NULL, 
+	Org smallint  NOT NULL, 
+	Knd tinyint NOT NULL, 
+	Dt_Invo date NOT NULL, 
+	Val float NOT NULL, 
+	Note varchar(100) NOT NULL, 
+	Sdoc tinyint NOT NULL, 
+	Dt_Sdoc date NOT NULL, 
+	Lic int  NOT NULL, 
+	Usr varchar(15) NOT NULL, 
+	Pnt tinyint NOT NULL,  
+ CONSTRAINT [PK_T_Invoice] PRIMARY KEY CLUSTERED ( [Idn] asc )
+) ON [PRIMARY]
+
+CREATE PROC dbo.sel_Invoice
 @Dt_Fst date, @Dt_Lst date 
-as
-select Idn, Org, Knd, Dt_Invo, Val, Note, Lic, Pnt 
-from dbo.T_Invoice
---where Dt_Fst=@Dt_Fst, Dt_Lst=@Dt_Lst 
-return 0;
+AS
+SELECT Idn, Org, Knd, Dt_Invo, Val, Note, Lic, Pnt 
+FROM dbo.T_Invoice
+--WHERE Dt_Fst=@Dt_Fst, Dt_Lst=@Dt_Lst 
+RETURN 0;
 
-create proc dbo.det_Invoice @Idn int
-as
-select Idn, Org, Knd, Dt_Invo, Val, Note, Lic, Pnt 
-from dbo.T_Invoice
-where Idn=@Idn
-return 0;
+CREATE PROC dbo.det_Invoice @Idn int
+AS
+SELECT Idn, Org, Knd, Dt_Invo, Val, Note, Lic, Pnt 
+FROM dbo.T_Invoice
+WHERE Idn=@Idn
+RETURN 0;
 
-create proc dbo.ins_Invoice
+CREATE PROC dbo.ins_Invoice
 @Idn int out, @Org smallint, @Knd tinyint, @Dt_Invo date, @Val float, @Note varchar(100), @Sdoc tinyint, @Dt_Sdoc date, @Lic int, @Usr varchar(15), @Pnt tinyint 
-as
-insert into dbo.T_Invoice (Org, Knd, Dt_Invo, Val, Note, Sdoc, Dt_Sdoc, Lic, Usr, Pnt) 
-values (@Org, @Knd, @Dt_Invo, @Val, @Note, @Sdoc, @Dt_Sdoc, @Lic, @Usr, @Pnt)
-set @Idn=cast(IDENT_CURRENT('dbo.T_Invoice') as int)
-return 0;
+AS
+INSERT INTO dbo.T_Invoice (Org, Knd, Dt_Invo, Val, Note, Sdoc, Dt_Sdoc, Lic, Usr, Pnt) 
+VALUES (@Org, @Knd, @Dt_Invo, @Val, @Note, @Sdoc, @Dt_Sdoc, @Lic, @Usr, @Pnt)
+SET @Idn=CAST(IDENT_CURRENT('dbo.T_Invoice') AS int)
+RETURN 0;
 
-create proc dbo.upd_Invoice
+CREATE PROC dbo.upd_Invoice
 @Idn int out, @Org smallint, @Knd tinyint, @Dt_Invo date, @Val float, @Note varchar(100), @Sdoc tinyint, @Dt_Sdoc date, @Lic int, @Usr varchar(15), @Pnt tinyint 
-as
-update dbo.T_Invoice set
+AS
+UPDATE dbo.T_Invoice SET
 Org=@Org, Knd=@Knd, Dt_Invo=@Dt_Invo, Val=@Val, Note=@Note, Sdoc=@Sdoc, Dt_Sdoc=@Dt_Sdoc, Lic=@Lic, Usr=@Usr, Pnt=@Pnt 
-where Idn=@Idn
-return 0;
+WHERE Idn=@Idn
+RETURN 0;
 

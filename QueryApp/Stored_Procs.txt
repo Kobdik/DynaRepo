@@ -10,7 +10,7 @@ CREATE TABLE dbo.T_Invoice(
 	Lic int  NOT NULL, 
 	Usr varchar(15) NOT NULL, 
 	Pnt tinyint NOT NULL,  
- CONSTRAINT [PK_T_Invoice] PRIMARY KEY CLUSTERED ( [Idn] asc )
+ CONSTRAINT [PK_T_Invoice] PRIMARY KEY CLUSTERED ( [Idn] ASC )
 ) ON [PRIMARY]
 
 CREATE PROC dbo.sel_Invoice

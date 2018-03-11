@@ -76,7 +76,7 @@ namespace Kobdik.Common
         void SelectToStream(Stream stream);
         void DetailToStream(Stream stream, int idn);
         void ActionToStream(Stream stream, string cmd);
-        string GetInfo();
+        string GetInfo(string kind);
     }
 
 }

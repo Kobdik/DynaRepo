@@ -22,10 +22,14 @@ public class QueryInvo : DynaQuery<Invo>
  public QueryInvo(IDynaObject dynaObject) 
   : base(dynaObject)
  {
-  MapToCurrent("Idn", "Idn");
+  //автоматически отобразить
+  //select поля на свойства
+  AutoMapProps(3);
+  //MapToCurrent("Idn", "Idn");
+  //MapToCurrent("Val", "Val");
+  //MapToCurrent("Note", "Note");
+  //вручную - если имена отличаются
   MapToCurrent("Dt_Invo", "DtInvo");
-  MapToCurrent("Val", "Val");
-  MapToCurrent("Note", "Note");
  }
 
  public override void OnReset(string message)
@@ -54,4 +58,6 @@ public class QueryInvo : DynaQuery<Invo>
   Console.WriteLine("{0} {1} {2} {3}", invo.Idn, invo.DtInvo, invo.Val, invo.Note);
  }
 ```
-Заметьте, что в данном случае в `dynaObject` колонок полей больше, чем свойств `Invo`, что не мешает загрузке данных в `List<Invo>`.
+Заметьте, что в данном случае в *dynaObjec*` колонок полей больше, чем свойств `Invo`, но `List<Invo>` загружает данные на пересечении свойств. Замеры производительности показывают, что скорость исполнения *LINQ to Objects* запросов по кэшированным данным у `DynaQuery<T>` в полтора раза выше, чем у `EF`. Кроме того, переменная составляющая, характеризующая в том числе затраты времени на рефлексию свойств при загрузке данных из БД, в 2.66 раза меньше, чем у `EF`.
+
+Замеры производительности в сравнении с LINQ to [EF Challenge](https://github.com/Kobdik/DynaRepo/blob/master/docs/Challenge.md).

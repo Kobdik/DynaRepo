@@ -45,11 +45,11 @@ namespace Kobdik.Common
         Type GetPropType();
         int GetSize();
         byte GetFlags();
+        Object Value { get; set; }
         int Ordinal { get; set; }
         void ReadProp(IDataRecord record);
         void WriteProp(IDataRecord record, IPropWriter writer);
         void WriteProp(IPropWriter writer);
-        Object Value { get; set; }
     }
 
     public interface IDbQuery : IDisposable
@@ -76,6 +76,8 @@ namespace Kobdik.Common
         void SelectToStream(Stream stream);
         void DetailToStream(Stream stream, int idn);
         void ActionToStream(Stream stream, string cmd);
+        IStreamReader StreamReader { get; }
+        IStreamWriter StreamWriter { get; }
         string GetInfo(string kind);
     }
 

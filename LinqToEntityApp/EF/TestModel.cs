@@ -13,6 +13,14 @@ namespace LinqToEntityApp.EF
 
         public virtual DbSet<Invo> Invos { get; set; }
 
+        public virtual DbSet<InvoR4> InvoR4s { get; set; }
+
+        public virtual DbSet<InvoR8> InvoR8s { get; set; }
+
+        public virtual DbSet<InvoR16> InvoR16s { get; set; }
+
+        public virtual DbSet<Invoice> Invoices { get; set; }
+
         protected override void OnModelCreating(DbModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Invo>()

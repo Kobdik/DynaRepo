@@ -1,28 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using LinqToEntityApp.EF;
 using System.Runtime.Serialization.Json;
+using LinqToEntityApp.EF;
 
 namespace LinqToEntityApp
 {
     class Program
     {
+        static List<Int32> timeList;
+
         static void Main(string[] args)
         {
-            Console.WriteLine("Test Linq to Entities");
-            Test1J();
-            Console.ReadLine();
+            timeList = new List<int>(64);
+            Console.WriteLine("Test Linq to Entities. Esc - to exit. Commands: J, M, 1, 2, 3, 4");
+            ConsoleKeyInfo cki;
+            do
+            {
+                cki = Console.ReadKey();
+                switch (cki.Key)
+                {
+                    case ConsoleKey.J: TestJ(); break;
+                    case ConsoleKey.M: TestM_Avg(33); break;
+                    case ConsoleKey.D1: TestR1_Avg(33); break;
+                    case ConsoleKey.D2: TestR4_Avg(33); break;
+                    case ConsoleKey.D3: TestR8_Avg(33); break;
+                    case ConsoleKey.D4: TestR16_Avg(33); break;
+                }
+            }
+            while (cki.Key != ConsoleKey.Escape);
         }
 
-        private static void Test1W()
+        private static void TestW()
         {
             using (var context = new TestModel())
             {
                 int count = 0;
                 double sum_gt = 0;
-                long fst = DateTime.Now.Ticks;
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
                 //Первоначальная загрузка из БД
                 Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
                 var query = from invoice in context.Invoices
@@ -37,62 +55,274 @@ namespace LinqToEntityApp
                     //with Console ~11'218'000 (1.1s) and without ~ 3'900'000 ticks (390ms)
                     //Console.WriteLine("{0} {1} {2} {3} {4} {5} {6} {7} {8}", count, invoice.Idn, invoice.Org, invoice.Knd, invoice.Dt_Invo, invoice.Val, invoice.Note, invoice.Lic, invoice.Pnt);
                 }
-                long lst = DateTime.Now.Ticks;
-                long ts = lst - fst;
-                Console.WriteLine("Done 0. Count={0}, Sum={1}. Time elapsed {2} ticks", count, sum_gt, ts);
-                Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                Console.WriteLine("Использовано памяти {0}", GC.GetTotalMemory(false));
+                Console.WriteLine("Done W. Время {0} ms", ts.Milliseconds);
             }
         }
 
-        private static void Test1J()
+        private static void TestJ()
         {
             using (var context = new TestModel())
             {
-                long fst = DateTime.Now.Ticks;
+                Console.WriteLine();
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
                 //Первоначальная загрузка из БД
-                Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
-                //Лучшее время 4'654'000 ticks
+                //Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
                 using (FileStream wfs = new FileStream("InvoiceEF.json", FileMode.Create))
                 {
                     DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(IEnumerable<Invoice>));
                     ser.WriteObject(wfs, context.Invoices);
                 }
-                long lst = DateTime.Now.Ticks;
-                long ts = lst - fst;
-                Console.WriteLine("Done 0. Time elapsed {0} ticks", ts);
-                Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                //В json  140 ms
+                //Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
+                Console.WriteLine("Done J: Время {0} ms", ts.Milliseconds);
             }
         }
 
-        private static void Test1R()
+        private static void TestM_Avg(int max)
+        {
+            timeList.Clear();
+            Console.WriteLine();
+            long m_fst = GC.GetTotalMemory(false);
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            for (int i = 0; i < max; i++)
+            {
+                TestM(i);
+            }
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
+            long m_lst = GC.GetTotalMemory(false);
+            Console.WriteLine("Done M. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
+            Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
+            using (FileStream fs = new FileStream("TestM_EF.txt", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                foreach (int t in timeList)
+                {
+                    sr.WriteLine("{0}", t);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+        private static void TestM(int num)
+        {
+            using (var context = new TestModel())
+            {
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+                using (MemoryStream ms = new MemoryStream(1000000))
+                {
+                    DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(IEnumerable<Invo>));
+                    ser.WriteObject(ms, context.Invos);
+                }
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                timeList.Add(ts.Milliseconds);
+                //Console.WriteLine("Done J{0}: Время {1} ms", num, ts.Milliseconds);
+            }
+        }
+
+        private static void TestR1_Avg(int max)
+        {
+            timeList.Clear();
+            Console.WriteLine();
+            long m_fst = GC.GetTotalMemory(false);
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            for (int i = 0; i < max; i++)
+            {
+                TestR1(i);
+            }
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
+            long m_lst = GC.GetTotalMemory(false);
+            Console.WriteLine("Done R1. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
+            Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
+            using (FileStream fs = new FileStream("TestR1_EF.txt", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                foreach (int t in timeList)
+                {
+                    sr.WriteLine("{0}", t);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+        private static void TestR4_Avg(int max)
+        {
+            timeList.Clear();
+            Console.WriteLine();
+            for (int i = 0; i < max; i++)
+            {
+                TestR4(i);
+            }
+            Console.WriteLine("Done R4. Среднее время {0} ms.", timeList.Skip(1).Average());
+            using (FileStream fs = new FileStream("TestR4_EF.txt", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                foreach (int t in timeList)
+                {
+                    sr.WriteLine("{0}", t);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+        private static void TestR8_Avg(int max)
+        {
+            timeList.Clear();
+            Console.WriteLine();
+            for (int i = 0; i < max; i++)
+            {
+                TestR8(i);
+            }
+            Console.WriteLine("Done R8. Среднее время {0} ms.", timeList.Skip(1).Average());
+            using (FileStream fs = new FileStream("TestR8_EF.txt", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                foreach (int t in timeList)
+                {
+                    sr.WriteLine("{0}", t);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+        private static void TestR16_Avg(int max)
+        {
+            timeList.Clear();
+            Console.WriteLine();
+            for (int i = 0; i < max; i++)
+            {
+                TestR16(i);
+            }
+            Console.WriteLine("Done R16. Среднее время {0} ms.", timeList.Skip(1).Average());
+            using (FileStream fs = new FileStream("TestR16_EF.txt", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                foreach (int t in timeList)
+                {
+                    sr.WriteLine("{0}", t);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+
+        private static void TestR1(int num)
         {
             using (var context = new TestModel())
             {
                 int count = 0;
                 double sum_gt = 0;
-                long fst = DateTime.Now.Ticks;
-                //Первоначальная загрузка из БД T_InvoRep - 4-х кратная реплика T_InvoCut
-                Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
-                /*
+                //context.Database.Log = Console.WriteLine;
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+                //Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
                 var query = from invo in context.Invos
-                            where invo.Val > 0
+                            where invo.Val > num
                             orderby invo.Dt_Invo
                             select invo;
-                            */
                 //LINQ to Entities
-                foreach (Invo invo in context.Invos)
+                foreach (Invo invo in query)
                 {
                     count++;
                     sum_gt += invo.Val;
-                    //R4 составило ~ 4'000'000 ticks (400ms)
-                    //R8 составило ~ 6'500'000 ticks (650ms)
-                    //статистически ~ более 420 ms
-                    //Console.WriteLine("{0} {1} {2} {3} {4}", count, invo.Idn, invo.Dt_Invo, invo.Val, invo.Note);
                 }
-                long lst = DateTime.Now.Ticks;
-                long ts = lst - fst;
-                Console.WriteLine("Done 0. Count={0}, Sum={1}. Time elapsed {2} ticks", count, sum_gt, ts);
-                Console.WriteLine("Total memory {0}", GC.GetTotalMemory(false));
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                //long m_lst = GC.GetTotalMemory(false);
+                //Console.WriteLine("R {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+                //Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
+                timeList.Add(ts.Milliseconds);
+            }
+        }
+
+        private static void TestR4(int num)
+        {
+            using (var context = new TestModel())
+            {
+                int count = 0;
+                double sum_gt = 0;
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+                var query = from invo in context.InvoR4s
+                            where invo.Val > 0
+                            orderby invo.Dt_Invo
+                            select invo;
+                //LINQ to Entities
+                foreach (InvoR4 invo in query)
+                {
+                    count++;
+                    sum_gt += invo.Val;
+                }
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                //Console.WriteLine("R {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+                timeList.Add(ts.Milliseconds);
+            }
+        }
+
+        private static void TestR8(int num)
+        {
+            using (var context = new TestModel())
+            {
+                int count = 0;
+                double sum_gt = 0;
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+                var query = from invo in context.InvoR8s
+                            where invo.Val > 0
+                            orderby invo.Dt_Invo
+                            select invo;
+                //LINQ to Entities
+                foreach (InvoR8 invo in query)
+                {
+                    count++;
+                    sum_gt += invo.Val;
+                }
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                //Console.WriteLine("R {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+                timeList.Add(ts.Milliseconds);
+            }
+        }
+
+        private static void TestR16(int num)
+        {
+            using (var context = new TestModel())
+            {
+                int count = 0;
+                double sum_gt = 0;
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+                var query = from invo in context.InvoR16s
+                            where invo.Val > 0
+                            orderby invo.Dt_Invo
+                            select invo;
+                //LINQ to Entities
+                foreach (InvoR16 invo in query)
+                {
+                    count++;
+                    sum_gt += invo.Val;
+                }
+                stopWatch.Stop();
+                TimeSpan ts = stopWatch.Elapsed;
+                //Console.WriteLine("R {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+                timeList.Add(ts.Milliseconds);
             }
         }
 

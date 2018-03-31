@@ -1,107 +1,68 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
 using System.Data.Common;
-using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using Newtonsoft.Json;
 using Kobdik.Common;
 using Kobdik.Dynamics;
-using Newtonsoft.Json;
 
 namespace Kobdik.DataModule
 {
-    #region DictDefinitions
-
-    public class QryDef
-    {
-        public byte qry_id, master, col_def;
-        public string qry_name, qry_head;
-        public byte qry_flags, col_flags;
-        public byte[] groups;
-    }
-
-    public class PamDef
-    {
-        public byte qry_id, pam_id, pam_type;
-        public string pam_name, def_val;
-        public short pam_size;
-    }
-
-    public class ColDef
-    {
-        public byte qry_id, col_id, col_type, look_qry, look_key, look_res;
-        public string col_name, col_head;
-        public short col_size;
-        public byte col_flags, ext_flags;
-    }
-
-    #endregion
-
     public delegate void NotifyEvent(String message);
+    public delegate IDbConnection Connection();
 
     public class DataMod
     {
         #region fields
         public NotifyEvent ShowError, ShowMessage;
+        public Connection GetConnection;
         public List<QryDef> qryList;
-        public List<PamDef> pamList;
-        public List<ColDef> colList;
-        public Dictionary<string, DynaObject> objDict;
+        public List<FldDef> fldList;
+        public Dictionary<string, DynaRecord> recDict;
         public string lastError = "";
         public static bool loaded = false;
         private static DataMod dataMod;
-        private string connString;
         private object lockObj;
         #endregion fields
 
         static DataMod()
         {
             dataMod = new DataMod();
-            loaded = dataMod.LoadMeta();
         }
 
         private DataMod() 
         {
             lockObj = new Object();
             qryList = new List<QryDef>(32);
-            pamList = new List<PamDef>(32);
-            colList = new List<ColDef>(128);
-            objDict = new Dictionary<string, DynaObject>(16);
-            connString = ConfigurationManager.AppSettings["Conn"];
+            fldList = new List<FldDef>(128);
+            recDict = new Dictionary<string, DynaRecord>(32);
         }
 
         public static DataMod Current() { return dataMod; }
 
-        private IDbConnection GetConnection()
+        public bool LoadMeta()
         {
-            return new SqlConnection
-            {
-                //Connection, определяемый строкой соединения
-                ConnectionString = connString
-            };
-        }
-
-        private bool LoadMeta()
-        {
-            bool result = false;
-            SqlConnection sqlConn = null;
-            SqlCommand qryComm = null, pamComm = null, colComm = null;
-            DbDataReader qryReader = null, pamReader = null, colReader = null;
+            loaded = false;
+            IDbConnection dbConn = null;
+            IDbCommand qryComm = null, fldComm = null;
+            IDataReader qryReader = null, fldReader = null;
             try
             {
+                recDict.Clear();
                 //get connection from pool
-                sqlConn = new SqlConnection();
-                sqlConn.ConnectionString = connString;
-                sqlConn.Open();
+                dbConn = GetConnection();
+                dbConn.Open();
                 //qryDict
-                qryComm = new SqlCommand("select Qry_Id, Qry_Name, Qry_Head, Col_Def, Col_Flag from T_QryDict", sqlConn);
+                qryComm = dbConn.CreateCommand();
                 qryComm.CommandType = CommandType.Text;
+                qryComm.CommandText = "select Qry_Id, Qry_Name, Qry_Head, Col_Def, Col_Flag from T_QryDict";
                 qryReader = qryComm.ExecuteReader();
+                qryList.Clear();
                 while (qryReader.Read())
                 {
                     QryDef qryDef = new QryDef();
@@ -113,42 +74,29 @@ namespace Kobdik.DataModule
                     qryList.Add(qryDef);
                 }
                 qryReader.Close();
-                //pamDict
-                pamComm = new SqlCommand("select Qry_Id, Pam_Id, Pam_Name, Pam_Type, Pam_Size, Def_Val from T_PamDict", sqlConn);
-                pamComm.CommandType = CommandType.Text;
-                pamReader = pamComm.ExecuteReader();
-                while (pamReader.Read())
+                //fldList
+                fldComm = dbConn.CreateCommand();
+                fldComm.CommandType = CommandType.Text;
+                fldComm.CommandText = "select Qry_Name, Fld_Name, Fld_Head, Fld_Type, Fld_Size, Inp_Mask, Out_Mask, Def_Val from T_FldDict";
+                fldReader = fldComm.ExecuteReader();
+                fldList.Clear();
+                while (fldReader.Read())
                 {
-                    PamDef pamDef = new PamDef();
-                    pamDef.qry_id = pamReader.GetByte(0);
-                    pamDef.pam_id = pamReader.GetByte(1);
-                    pamDef.pam_name = pamReader.GetString(2);
-                    pamDef.pam_type = pamReader.GetByte(3);
-                    pamDef.pam_size = pamReader.GetInt16(4);
-                    pamDef.def_val = pamReader.GetString(5);
-                    pamList.Add(pamDef);
+                    FldDef fldDef = new FldDef();
+                    fldDef.qry_name = fldReader.GetString(0);
+                    fldDef.fld_name = fldReader.GetString(1);
+                    fldDef.fld_head = fldReader.GetString(2);
+                    fldDef.fld_type = fldReader.GetInt32(3);
+                    fldDef.fld_size = fldReader.GetInt32(4);
+                    fldDef.inp_mask = fldReader.GetInt32(5);
+                    fldDef.out_mask = fldReader.GetInt32(6);
+                    fldDef.def_val = fldReader.GetString(7);
+                    fldList.Add(fldDef);
                 }
-                pamReader.Close();
-                //colDict
-                colComm = new SqlCommand("select Qry_Id, Col_Id, Col_Name, Col_Head, Col_Type, Col_Size, Col_Flag from T_ColDict", sqlConn);
-                colComm.CommandType = CommandType.Text;
-                colReader = colComm.ExecuteReader();
-                while (colReader.Read())
-                {
-                    ColDef colDef = new ColDef();
-                    colDef.qry_id = colReader.GetByte(0);
-                    colDef.col_id = colReader.GetByte(1);
-                    colDef.col_name = colReader.GetString(2);
-                    colDef.col_head = colReader.GetString(3);
-                    colDef.col_type = colReader.GetByte(4);
-                    colDef.col_size = colReader.GetInt16(5);
-                    colDef.col_flags = colReader.GetByte(6);
-                    colList.Add(colDef);
-                }
-                colReader.Close();
-                result = true;
+                fldReader.Close();
+                loaded = true;
             }
-            catch (SqlException sx)
+            catch (DbException sx)
             {
                 //if (ShowError != null) ShowError(sx.Message);
                 lastError = sx.Message;
@@ -160,47 +108,42 @@ namespace Kobdik.DataModule
             }
             finally
             {
-                if (colReader != null) colReader.Close();
-                if (pamReader != null) pamReader.Close();
+                if (fldReader != null) fldReader.Close();
                 if (qryReader != null) qryReader.Close();
-                if (sqlConn != null) sqlConn.Close();
+                if (dbConn != null) dbConn.Close();
             }
-            return result;
+            return loaded;
         }
 
-        public DynaObject GetDynaObject(string key) 
+        public DynaRecord GetDynaRecord(string key)
         {
             lock (lockObj)
             {
-                DynaObject dynaObject = null;
+                DynaRecord dynaRecord = null;
                 //поискать в кэше объектов
-                if (objDict.TryGetValue(key, out dynaObject)) return dynaObject;
+                if (recDict.TryGetValue(key, out dynaRecord)) return dynaRecord;
                 //иначе создать DynaObject
-                byte qryId = (byte)qryList.FindIndex(q => q.qry_name == key);
-                if (qryId == 255)
+                QryDef qryDef = qryList.Find(qry => qry.qry_name == key);
+                if (qryDef == null)
                 {
                     dataMod.lastError = string.Format("Запрос {0} не найден!", key);
                     return null;
                 }
-                QryDef qryDef = qryList[qryId];
-                dynaObject = new DynaObject(qryDef)
+                dynaRecord = new DynaRecord(qryDef)
                 {
                     //Адаптер для работы с DB
-                    Query = new DbQuery(GetConnection(), key),
+                    Query = new DataQuery(GetConnection(), key),
                     //Для чтения json-потока
                     StreamReader = new JsonStreamReader(),
                     //Для записи в json-поток
-                    StreamWriter = new JsonStreamWriter()
+                    StreamWriter = new TextStreamWriter()
                 };
-                //загрузить описание параметров select-запроса
-                foreach (PamDef pamDef in pamList.Where(p => p.qry_id == qryDef.qry_id))
-                    dynaObject.CreateParm(pamDef);
                 //загрузить описания всех колонок
-                foreach (ColDef colDef in colList.Where(c => c.qry_id == qryDef.col_def))
-                    dynaObject.CreateProp(colDef);
+                foreach (FldDef fldDef in fldList.Where(fld => fld.qry_name == key))
+                    dynaRecord.CreateField(fldDef);
                 //добавить в кэш объектов
-                objDict.Add(key, dynaObject);
-                return dynaObject;
+                recDict.Add(key, dynaRecord);
+                return dynaRecord;
             }
         }
 
@@ -268,6 +211,7 @@ namespace Kobdik.DataModule
 
     public class JsonStreamWriter : IStreamWriter, IPropWriter
     {
+        private Encoding win1251 = Encoding.GetEncoding(1251);
         private Stack<byte> stack;
         private JsonTextWriter writer;
         private StringBuilder builder;
@@ -287,10 +231,11 @@ namespace Kobdik.DataModule
             else
             {
                 builder = null;
-                textWriter = new StreamWriter(stream);
+                textWriter = new StreamWriter(stream, win1251);
                 result = "Open stream writer..";
             }
             writer = new JsonTextWriter(textWriter);
+            //writer.Culture = new CultureInfo("ru-RU");
             stack = new Stack<byte>();
         }
 
@@ -331,6 +276,17 @@ namespace Kobdik.DataModule
                 case 3: writer.WriteEndArray(); break;
                 case 4: writer.WriteEndObject(); break;
             }
+        }
+
+        public void WriteProp(String propName)
+        {
+            writer.WritePropertyName(propName);
+        }
+
+        public void WriteProp(Byte[] value, int len, int state)
+        {
+            if ((state & 1) > 0)
+                writer.WriteValue(win1251.GetString(value, 0, len));
         }
 
         public void WriteProp(String propName, String value)
@@ -388,26 +344,283 @@ namespace Kobdik.DataModule
         public string Result => result;
     }
 
+    public class TextStreamWriter : IStreamWriter, IPropWriter
+    {
+        private Stack<byte> stack;
+        private TextWriter writer;
+        private StringBuilder builder;
+        private Encoding win1251;
+        private string result;
+        private bool empty;
+        //1-bin, 2-json, 3-xml
+        public byte GetStreamType() { return 2; }
+
+        public void Open(Stream stream)
+        {
+            if (stream == null)
+            {
+                builder = new StringBuilder();
+                writer = new StringWriter(builder);
+                result = "Open string writer..";
+            }
+            else
+            {
+                builder = null;
+                writer = new StreamWriter(stream);
+                result = "Open stream writer..";
+            }
+            //writer.Culture = new CultureInfo("ru-RU");
+            win1251 = Encoding.GetEncoding(1251);
+            stack = new Stack<byte>(4);
+            empty = true;
+        }
+
+        public void PushArr()
+        {
+            if (empty)
+                writer.Write('[');
+            else
+                writer.Write(",[");
+            //Array container
+            stack.Push(1);
+            //in array context
+            empty = true;
+        }
+
+        public void PushObj()
+        {
+            if (empty)
+                writer.Write('{');
+            else
+                writer.Write(",{");
+            //Object container
+            stack.Push(2);
+            //in object context
+            empty = true;
+        }
+
+        public void PushArrProp(string propName)
+        {
+            if (empty)
+                writer.Write(String.Format("\"{0}\":[", propName));
+            else
+                writer.Write(String.Format(",\"{0}\":[", propName));
+            //Array property
+            stack.Push(3);
+            //in array context
+            empty = true;
+        }
+
+        public void PushObjProp(string propName)
+        {
+            if (empty)
+                writer.Write(String.Format("\"{0}\":{", propName));
+            else
+                writer.Write(String.Format(",\"{0}\":{", propName));
+            //Object property
+            stack.Push(4);
+            //in object context
+            empty = true;
+        }
+
+        public void Pop()
+        {
+            if (stack.Count == 0) return;
+            byte top = stack.Pop();
+            switch (top)
+            {
+                case 1: writer.Write("]"); break;
+                case 2: writer.Write("}"); break;
+                case 3: writer.Write("]"); break;
+                case 4: writer.Write("}"); break;
+            }
+            empty = false;
+        }
+
+        public void WriteProp(String propName)
+        {
+            if (empty)
+            {
+                writer.Write("\"");
+                //writer.Write("\"{0}\":\"", propName);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":\"", propName);
+                empty = false;
+            }
+            writer.Write(propName);
+            writer.Write("\":");
+        }
+
+        public void WriteProp(Byte[] value, int len, int state)
+        {
+            if ((state & 1) > 0) writer.Write('\"');
+            writer.Write(win1251.GetString(value, 0, len));
+            if ((state & 2) > 0) writer.Write('\"');
+        }
+
+        public void WriteProp(String propName, String value)
+        {
+            if (empty)
+            {
+                writer.Write("\"");
+                //writer.Write("\"{0}\":\"{1}\"", propName, value);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":\"{1}\"", propName, value);
+            }
+            writer.Write(propName);
+            writer.Write("\":\"");
+            writer.Write(value);
+            writer.Write("\"");
+        }
+
+        public void WriteProp(String propName, Byte value)
+        {
+            if (empty)
+            {
+                writer.Write("\"");
+                //writer.Write("\"{0}\":{1}", propName, value);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":{1}", propName, value);
+            }
+            writer.Write(propName);
+            writer.Write("\":");
+            writer.Write(value);
+        }
+
+        public void WriteProp(String propName, Int16 value)
+        {
+            if (empty)
+            {
+                writer.Write("\"");
+                //writer.Write("\"{0}\":{1}", propName, value);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":{1}", propName, value);
+            }
+            writer.Write(propName);
+            writer.Write("\":");
+            writer.Write(value);
+        }
+
+        public void WriteProp(String propName, Int32 value)
+        {
+            if (empty)
+            {
+                writer.Write("\"");
+                //writer.Write("\"{0}\":{1}", propName, value);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":{1}", propName, value);
+            }
+            writer.Write(propName);
+            writer.Write("\":");
+            writer.Write(value);
+        }
+
+        public void WriteProp(String propName, DateTime value)
+        {
+            int dec;
+            if (empty)
+            {
+                writer.Write('\"');
+                //writer.Write("\"{0}\":\"{1}-{2:D2}-{3:D2}T00:00:00\"", propName, value.Year, value.Month, value.Day);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":\"{1}-{2:D2}-{3:D2}T00:00:00\"", propName, value.Year, value.Month, value.Day);
+            }
+            writer.Write(propName);
+            writer.Write("\":\"");
+            writer.Write(value.Year);
+            writer.Write('-');
+            dec = value.Month;
+            if (dec < 10) writer.Write('0');
+            writer.Write(dec);
+            writer.Write('-');
+            dec = value.Day;
+            if (dec < 10) writer.Write('0');
+            writer.Write(dec);
+            writer.Write("T00:00:00\"");
+        }
+
+        public void WriteProp(String propName, Double value)
+        {
+            if (empty)
+            {
+                writer.Write("\"");
+                //writer.Write("\"{0}\":{1}", propName, value);
+                empty = false;
+            }
+            else
+            {
+                writer.Write(",\"");
+                //writer.Write(",\"{0}\":{1}", propName, value);
+            }
+            writer.Write(propName);
+            writer.Write("\":");
+            writer.Write(value);
+        }
+
+        public void Close()
+        {
+            try
+            {
+                while (stack.Count > 0) Pop();
+                if (builder != null)
+                    result = builder.ToString();
+            }
+            catch (Exception) { }
+            finally
+            {
+                writer.Flush();
+                writer.Close();
+            }
+        }
+
+        public string Result => result;
+    }
+
+
     public class PropMap
     {
-        public IDynaProp Prop => dynaProp;
+        public IDynaField Field => dynaField;
         public MethodInfo GetMethod { get; set; }
         public MethodInfo SetMethod { get; set; }
         private object[] parameters;
-        private IDynaProp dynaProp;
+        private IDynaField dynaField;
 
-        public PropMap(IDynaProp prop)
+        public PropMap(IDynaField field)
         {
-            dynaProp = prop;
+            dynaField = field;
             parameters = new object[1];
         }
 
         public void ReadToObject(IDataReader reader, object obj)
         {
-            dynaProp.ReadProp(reader);
+            dynaField.ReadProp(reader);
             if (SetMethod != null)
             {
-                parameters[0] = dynaProp.Value;
+                parameters[0] = dynaField.Value;
                 SetMethod.Invoke(obj, parameters);
             }
         }
@@ -415,14 +628,14 @@ namespace Kobdik.DataModule
         public void GetFromObject(object obj)
         {
             if (GetMethod != null)
-                dynaProp.Value = GetMethod.Invoke(obj, null);
+                dynaField.Value = GetMethod.Invoke(obj, null);
         }
 
         public void SetToObject(object obj)
         {
             if (SetMethod != null)
             {
-                parameters[0] = dynaProp.Value;
+                parameters[0] = dynaField.Value;
                 SetMethod.Invoke(obj, parameters);
             }
         }
@@ -431,25 +644,25 @@ namespace Kobdik.DataModule
 
     public abstract class DynaQuery<T> : IEnumerable<T>, IEnumerator<T>, IEnumerable, IEnumerator
     {
-        protected IDynaObject _dynaObject;
+        protected IDynaRecord _dynaRecord;
         protected IDataReader _dataReader;
         protected List<PropMap> propMaps;
         protected List<PropMap> sel_Maps;
-        private IDynaCommand _dynaCmd;
+        private IDataCommand _dataCmd;
         private List<T> list;
         private T _current;
         private Type _type;
         private bool cached, dbread;
         private int i_current;
 
-        public DynaQuery(IDynaObject dynaObject)
+        public DynaQuery(IDynaRecord dynaRecord)
         {
-            _dynaObject = dynaObject;
-            _dynaCmd = dynaObject as IDynaCommand;
+            _dynaRecord = dynaRecord;
+            _dataCmd = dynaRecord as IDataCommand;
             _current = Activator.CreateInstance<T>();
             _type = _current.GetType();
-            propMaps = new List<PropMap>(dynaObject.PropDict.Count);
-            sel_Maps = new List<PropMap>(dynaObject.PropDict.Count);
+            propMaps = new List<PropMap>(16);
+            sel_Maps = new List<PropMap>(16);
             list = new List<T>(1024);
             cached = false;
         }
@@ -494,15 +707,15 @@ namespace Kobdik.DataModule
             return hasNext;
         }
 
-        public void Update(T t)
+        public void Action(T t, string cmd)
         {
             //считываем связанные свойства в _dynaObject
             foreach (var propMap in propMaps)
                 propMap.GetFromObject(t);
             //отправляем изменения и получаем результаты
-            var outProps = _dynaCmd.Action("upd");
+            var outProps = _dataCmd.Action(cmd);
             //обновляем связанные свойства по полученным результатам
-            foreach (var propMap in propMaps.Where(bp => outProps.Contains(bp.Prop)))
+            foreach (var propMap in propMaps.Where(bp => outProps.Contains(bp.Field)))
                 propMap.SetToObject(t);
         }
 
@@ -517,11 +730,12 @@ namespace Kobdik.DataModule
                 dbread = false;
                 if (!cached)
                 {
-                    _dataReader = _dynaCmd.Select();
+                    _dataReader = _dataCmd.Select();
                     if (_dataReader != null)
                     {
                         sel_Maps.Clear();
-                        foreach (var propMap in propMaps.Where(pm => pm.Prop.Ordinal >= 0)) sel_Maps.Add(propMap);
+                        foreach (var propMap in propMaps.Where(pm => pm.Field.Ordinal >= 0)) sel_Maps.Add(propMap);
+                        sel_Maps.Sort((l, r) => l.Field.Ordinal - r.Field.Ordinal);
                         dbread = true;
                     }
                     cached = true;
@@ -535,22 +749,22 @@ namespace Kobdik.DataModule
             OnReset(result);
         }
 
-        public void AutoMapProps(int flags)
+        public void AutoMapProps(int cmd_bit)
         {
-            foreach (var pair in _dynaObject.PropDict)
+            foreach (var pair in _dynaRecord.FieldDict)
             {
-                IDynaProp prop = pair.Value;
-                if ((prop.GetFlags() & flags) > 0) MapToCurrent(pair.Key, pair.Key);
+                IDynaField field = pair.Value;
+                if ((field.GetOutMask() & cmd_bit) > 0) MapToCurrent(pair.Key, pair.Key);
             }
         }
 
-        public void MapToCurrent(string dynaPropName, string currPropName)
+        public void MapToCurrent(string fieldName, string propName)
         {
-            PropertyInfo info = _type.GetProperty(currPropName);
-            if (info == null || !_dynaObject.PropDict.ContainsKey(dynaPropName)) return;
-            IDynaProp prop = _dynaObject.PropDict[dynaPropName];
-            if (prop.GetPropType() != info.PropertyType) return;
-            propMaps.Add(new PropMap(prop)
+            PropertyInfo info = _type.GetProperty(propName);
+            if (info == null || !_dynaRecord.FieldDict.ContainsKey(fieldName)) return;
+            IDynaField field = _dynaRecord.FieldDict[fieldName];
+            if (field.GetPropType() != info.PropertyType) return;
+            propMaps.Add(new PropMap(field)
             {
                 GetMethod = info.GetGetMethod(),
                 SetMethod = info.GetSetMethod()
@@ -565,7 +779,7 @@ namespace Kobdik.DataModule
 
         public void Dispose()
         {
-            _dynaObject.Dispose();
+            _dynaRecord.Dispose();
         }
 
     }

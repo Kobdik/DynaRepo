@@ -2,12 +2,53 @@
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
-using System.Threading;
 
 namespace Kobdik.Common
 {
+    #region DictDefinitions
+
+    public class QryDef
+    {
+        public byte qry_id, master, col_def;
+        public string qry_name, qry_head;
+        public byte qry_flags, col_flags;
+        public byte[] groups;
+    }
+
+    public class FldDef
+    {
+        public string qry_name, fld_name, fld_head, def_val;
+        //string look_qry, look_key, look_res;
+        public int fld_type, fld_size, inp_mask, out_mask;
+    }
+
+    #endregion
+
+    public static class CmdBit
+    {
+        public static int Sel = 1, Det = 2, Ins = 4, Upd = 8, C16 = 16, C32 = 32, C64 = 64;
+
+        public static int GetBit(string cmd)
+        {
+            int cmd_bit = 0;
+            switch (cmd)
+            {
+                case "sel": cmd_bit = Sel; break;
+                case "det": cmd_bit = Det; break;
+                case "ins": cmd_bit = Ins; break;
+                case "upd": cmd_bit = Upd; break;
+                case "c16": cmd_bit = C16; break;
+                case "c32": cmd_bit = C32; break;
+                case "c64": cmd_bit = C64; break;
+            }
+            return cmd_bit;
+        }
+    }
+
     public interface IPropWriter
     {
+        void WriteProp(String propName);
+        void WriteProp(Byte[] value, int len, int state);
         void WriteProp(String propName, String value);
         void WriteProp(String propName, Byte value);
         void WriteProp(String propName, Int16 value);
@@ -38,13 +79,14 @@ namespace Kobdik.Common
         string Result { get; }
     }
 
-    public interface IDynaProp
+    public interface IDynaField
     {
         string GetName();
         DbType GetDbType();
         Type GetPropType();
         int GetSize();
-        byte GetFlags();
+        int GetInpMask();
+        int GetOutMask();
         Object Value { get; set; }
         int Ordinal { get; set; }
         void ReadProp(IDataRecord record);
@@ -52,33 +94,34 @@ namespace Kobdik.Common
         void WriteProp(IPropWriter writer);
     }
 
-    public interface IDbQuery : IDisposable
+    public interface IDataQuery : IDisposable
     {
-        IDataReader Select(IDynaProp[] parms);
-        IDataReader Detail(IDynaProp prop);
-        void Action(IDynaProp[] props, string cmd);
+        IDataReader Select(IEnumerable<IDynaField> fields, CommandBehavior behavior);
+        IDataReader Detail(IEnumerable<IDynaField> fields, CommandBehavior behavior);
+        IDynaField[] Action(IEnumerable<IDynaField> fields, string cmd);
+        int Rows_Affected { get; }
         string Result { get; }
     }
 
-    public interface IDynaCommand
+    public interface IDataCommand
     {
-        IDataReader Select();
-        IDataReader Detail(int idn);
-        IDynaProp[] Action(string cmd);
-        string Result { get; }
+        IDataReader Select(CommandBehavior behavior = CommandBehavior.Default);
+        IDataReader Detail(CommandBehavior behavior = CommandBehavior.Default);
+        IDynaField[] Action(string cmd);
+        int Rows_Affected { get; }
     }
 
-    public interface IDynaObject : IDisposable
+    public interface IDynaRecord : IDisposable
     {
-        Dictionary<String, IDynaProp> ParmDict { get; }
-        Dictionary<String, IDynaProp> PropDict { get; }
+        Dictionary<String, IDynaField> FieldDict { get; }
         void ReadPropStream(Stream stream, string cmd);
-        void SelectToStream(Stream stream);
-        void DetailToStream(Stream stream, int idn);
+        void SelectToStream(Stream stream, CommandBehavior behavior = CommandBehavior.Default);
+        void DetailToStream(Stream stream, CommandBehavior behavior = CommandBehavior.Default);
         void ActionToStream(Stream stream, string cmd);
         IStreamReader StreamReader { get; }
         IStreamWriter StreamWriter { get; }
         string GetInfo(string kind);
+        string Result { get; }
     }
 
 }

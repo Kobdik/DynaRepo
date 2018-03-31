@@ -1,35 +1,34 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
 using Kobdik.Common;
-using Kobdik.DataModule;
 
 namespace Kobdik.Dynamics
 {
-    public abstract class DynaProp : IDynaProp
+    public abstract class DynaField : IDynaField
     {
-        private byte _flags;
-        private string _name;
-        private DbType _dbtype;
-        protected Type _type;
-        protected short _size;
+        protected int fld_size, inp_flags, out_flags;
+        protected string fld_name;
+        protected DbType fld_dbtype;
+        protected Type fld_type;
 
-        public DynaProp(string name, DbType type, short size, byte flag)
+        public DynaField(string fldName, DbType fldType, int fldSize, int inpFlags, int outFlags)
         {
-            _name = name;
-            _dbtype = type;
-            _size = size;
-            _flags = flag;
+            fld_name = fldName;
+            fld_dbtype = fldType;
+            fld_size = fldSize;
+            inp_flags = inpFlags;
+            out_flags = outFlags;
         }
-        public string GetName() { return _name; }
-        public DbType GetDbType() { return _dbtype; }
-        public Type GetPropType() { return _type; }
-        public int GetSize() { return _size; }
-        public byte GetFlags() { return _flags; }
+        public string GetName() { return fld_name; }
+        public DbType GetDbType() { return fld_dbtype; }
+        public Type GetPropType() { return fld_type; }
+        public int GetSize() { return fld_size; }
+        public int GetInpMask() { return inp_flags; }
+        public int GetOutMask() { return out_flags; }
         public abstract Object Value { get; set; }
         public int Ordinal { get; set; }
         public abstract void ReadProp(IDataRecord record);
@@ -37,201 +36,280 @@ namespace Kobdik.Dynamics
         public abstract void WriteProp(IPropWriter writer);
     }
 
-    public sealed class StringProp : DynaProp
+    public sealed class StringField : DynaField
     {
-        private string _value;
+        private string fld_value;
 
-        public StringProp(string name, DbType dbtype, short size, byte flag) : base(name, dbtype, size, flag) { _type = typeof(string); }
+        public StringField(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(string);
+        }
 
         public override void ReadProp(IDataRecord record)
         {
-            SetValue(record.GetString(Ordinal));
+            fld_value = record.GetString(Ordinal);
         }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
         {
-            writer.WriteProp(GetName(), record.GetString(Ordinal));
+            writer.WriteProp(fld_name, record.GetString(Ordinal));
         }
 
         public override void WriteProp(IPropWriter writer)
         {
-            writer.WriteProp(GetName(), _value);
+            writer.WriteProp(fld_name, fld_value);
         }
 
         public override Object Value
         {
-            get { return _value; }
+            get { return fld_value; }
             set { SetValue(value as string); }
         }
 
         private void SetValue(string str_val)
         {
-            if (str_val.Length > _size)
-                _value = str_val.Substring(0, _size);
+            if (str_val.Length > fld_size)
+                fld_value = str_val.Substring(0, fld_size);
             else
-                _value = str_val;
-
+                fld_value = str_val;
         }
     }
 
-    public sealed class ByteProp : DynaProp
+    public sealed class TextField : DynaField
     {
-        private byte _value;
+        private string fld_value;
+        private byte[] fld_buff;
 
-        public ByteProp(string name, DbType type, short size, byte flag) : base(name, type, size, flag) { _type = typeof(byte); }
+        public TextField(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(string);
+            fld_buff = new byte[size];
+        }
 
-        public override void ReadProp(IDataRecord record) { _value = record.GetByte(Ordinal); }
+        public override void ReadProp(IDataRecord record)
+        {
+            fld_value = record.GetString(Ordinal);
+        }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
         {
-            writer.WriteProp(GetName(), record.GetByte(Ordinal));
+            writer.WriteProp(fld_name);
+            long length, offset = 0;
+            //const int start = 1, finish = 2;
+            int state = 1;
+            do //sequential access
+            {
+                length = record.GetBytes(Ordinal, offset, fld_buff, 0, fld_size);
+                if (length < fld_size) state += 2;
+                //write chunk of data
+                writer.WriteProp(fld_buff, (int)length, state);
+                offset += length;
+                state = 0;
+            }
+            while (length == fld_size);
         }
 
         public override void WriteProp(IPropWriter writer)
         {
-            writer.WriteProp(GetName(), _value);
+            writer.WriteProp(fld_name, fld_value);
         }
 
         public override Object Value
         {
-            get { return _value; }
-            set { _value = Convert.ToByte(value); }
+            get { return fld_value; }
+            set { fld_value = value as string; }
         }
+
     }
 
-    public sealed class Int16Prop : DynaProp
+    public sealed class ByteField : DynaField
     {
-        private Int16 _value;
+        private byte fld_value;
 
-        public Int16Prop(string name, DbType type, short size, byte flag) : base(name, type, size, flag) { _type = typeof(Int16); }
+        public ByteField(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(byte);
+        }
 
-        public override void ReadProp(IDataRecord record) { _value = record.GetInt16(Ordinal); }
+        public override void ReadProp(IDataRecord record)
+        {
+            fld_value = record.GetByte(Ordinal);
+        }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
         {
-            writer.WriteProp(GetName(), record.GetInt16(Ordinal));
+            writer.WriteProp(fld_name, record.GetByte(Ordinal));
         }
 
         public override void WriteProp(IPropWriter writer)
         {
-            writer.WriteProp(GetName(), _value);
+            writer.WriteProp(fld_name, fld_value);
         }
 
         public override Object Value
         {
-            get { return _value; }
-            set { _value = Convert.ToInt16(value); }
+            get { return fld_value; }
+            set { fld_value = Convert.ToByte(value); }
         }
     }
 
-    public sealed class Int32Prop : DynaProp
+    public sealed class Int16Field : DynaField
     {
-        private Int32 _value;
+        private Int16 fld_value;
 
-        public Int32Prop(string name, DbType type, short size, byte flag) : base(name, type, size, flag) { _type = typeof(Int32); }
+        public Int16Field(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(Int16);
+        }
 
-        public override void ReadProp(IDataRecord record) { _value = record.GetInt32(Ordinal); }
+        public override void ReadProp(IDataRecord record)
+        {
+            fld_value = record.GetInt16(Ordinal);
+        }
+
+        public override void WriteProp(IDataRecord record, IPropWriter writer)
+        {
+            writer.WriteProp(fld_name, record.GetInt16(Ordinal));
+        }
+
+        public override void WriteProp(IPropWriter writer)
+        {
+            writer.WriteProp(fld_name, fld_value);
+        }
+
+        public override Object Value
+        {
+            get { return fld_value; }
+            set { fld_value = Convert.ToInt16(value); }
+        }
+    }
+
+    public sealed class Int32Field : DynaField
+    {
+        private Int32 fld_value;
+
+        public Int32Field(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(Int32);
+        }
+
+        public override void ReadProp(IDataRecord record)
+        {
+            fld_value = record.GetInt32(Ordinal);
+        }
 
         public override void WriteProp(IDataRecord reader, IPropWriter writer)
         {
-            writer.WriteProp(GetName(), reader.GetInt32(Ordinal));
+            writer.WriteProp(fld_name, reader.GetInt32(Ordinal));
         }
 
         public override void WriteProp(IPropWriter writer)
         {
-            writer.WriteProp(GetName(), _value);
+            writer.WriteProp(fld_name, fld_value);
         }
 
         public override Object Value
         {
-            get { return _value; }
-            set { _value = Convert.ToInt32(value); }
+            get { return fld_value; }
+            set { fld_value = Convert.ToInt32(value); }
         }
     }
 
-    public sealed class DateProp : DynaProp
+    public sealed class DateField : DynaField
     {
-        private DateTime _value;
+        private DateTime fld_value;
 
-        public DateProp(string name, DbType type, short size, byte flag) : base(name, type, size, flag) { _type = typeof(DateTime); }
+        public DateField(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(DateTime);
+        }
 
-        public override void ReadProp(IDataRecord record) { _value = record.GetDateTime(Ordinal); }
+        public override void ReadProp(IDataRecord record)
+        {
+            fld_value = record.GetDateTime(Ordinal);
+        }
 
         public override void WriteProp(IDataRecord reader, IPropWriter writer)
         {
-            writer.WriteProp(GetName(), reader.GetDateTime(Ordinal));
+            writer.WriteProp(fld_name, reader.GetDateTime(Ordinal));
         }
 
         public override void WriteProp(IPropWriter writer)
         {
-            writer.WriteProp(GetName(), _value);
+            writer.WriteProp(fld_name, fld_value);
         }
 
         public override Object Value
         {
-            get { return _value; }
-            set { _value = Convert.ToDateTime(value); }
+            get { return fld_value; }
+            set { fld_value = Convert.ToDateTime(value); }
         }
     }
 
-    public sealed class DoubleProp : DynaProp
+    public sealed class DoubleField : DynaField
     {
-        private Double _value;
+        private Double fld_value;
 
-        public DoubleProp(string name, DbType type, short size, byte flag) : base(name, type, size, flag) { _type = typeof(double); }
+        public DoubleField(string name, DbType dbtype, int size, int inpFlags, int outFlags) : base(name, dbtype, size, inpFlags, outFlags)
+        {
+            fld_type = typeof(double);
+        }
 
-        public override void ReadProp(IDataRecord record) { _value = record.GetDouble(Ordinal); }
+        public override void ReadProp(IDataRecord record)
+        {
+            fld_value = record.GetDouble(Ordinal);
+        }
 
         public override void WriteProp(IDataRecord reader, IPropWriter writer)
         {
-            writer.WriteProp(GetName(), reader.GetDouble(Ordinal));
+            writer.WriteProp(fld_name, reader.GetDouble(Ordinal));
         }
 
         public override void WriteProp(IPropWriter writer)
         {
-            writer.WriteProp(GetName(), _value);
+            writer.WriteProp(fld_name, fld_value);
         }
 
         public override Object Value
         {
-            get { return _value; }
-            set { _value = Convert.ToDouble(value); }
+            get { return fld_value; }
+            set { fld_value = Convert.ToDouble(value); }
         }
     }
 
-    public class DbQuery : IDbQuery
+    public class DataQuery : IDataQuery
     {
         private IDbConnection db_conn;
         private IDataReader db_reader;
         private string qry_name;
 
-        public DbQuery(IDbConnection dbConn, string qryName)
+        public DataQuery(IDbConnection dbConn, string qryName)
         {
             db_conn = dbConn; qry_name = qryName;
         }
 
-        public IDataReader Select(IDynaProp[] parms)
+        public IDataReader Select(IEnumerable<IDynaField> fields, CommandBehavior behavior)
         {
             string proName = "sel_" + qry_name;
             IDbCommand selComm = db_conn.CreateCommand();
             selComm.CommandType = CommandType.StoredProcedure;
             selComm.CommandText = proName;
             //fill select parameters
-            foreach (IDynaProp parm in parms)
+            foreach (IDynaField field in fields.Where(fld => (fld.GetInpMask() & CmdBit.Sel) > 0))
             {
                 IDbDataParameter param = selComm.CreateParameter();
-                param.ParameterName = String.Format("@{0}", parm.GetName());
-                param.DbType = parm.GetDbType();
-                param.Size = parm.GetSize();
+                param.ParameterName = String.Format("@{0}", field.GetName());
+                param.DbType = field.GetDbType();
+                param.Size = field.GetSize();
                 //converted by db engine
-                param.Value = parm.Value;
+                param.Value = field.Value;
                 selComm.Parameters.Add(param);
             }
             db_reader = null;
             try
             {
                 db_conn.Open();
-                db_reader = selComm.ExecuteReader();
+                db_reader = selComm.ExecuteReader(behavior);
                 Result = "Ok";
             }
             catch (Exception ex)
@@ -242,25 +320,28 @@ namespace Kobdik.Dynamics
             return db_reader;
         }
 
-        public IDataReader Detail(IDynaProp prop)
+        public IDataReader Detail(IEnumerable<IDynaField> fields, CommandBehavior behavior)
         {
             String proName = "det_" + qry_name;
             IDbCommand detComm = db_conn.CreateCommand();
             detComm.CommandType = CommandType.StoredProcedure;
             detComm.CommandText = proName;
-            //detail parameters
-            IDbDataParameter param = detComm.CreateParameter();
-            param.ParameterName = String.Format("@{0}", prop.GetName());
-            param.DbType = prop.GetDbType();
-            param.Size = prop.GetSize();
-            param.Value = prop.Value;
-            //param.Size = 4;
-            detComm.Parameters.Add(param);
+            //fill detail parameters
+            foreach (IDynaField field in fields.Where(fld => (fld.GetInpMask() & CmdBit.Det) > 0))
+            {
+                IDbDataParameter param = detComm.CreateParameter();
+                param.ParameterName = String.Format("@{0}", field.GetName());
+                param.DbType = field.GetDbType();
+                param.Size = field.GetSize();
+                //converted by db engine
+                param.Value = field.Value;
+                detComm.Parameters.Add(param);
+            }
             db_reader = null;
             try
             {
                 db_conn.Open();
-                db_reader = detComm.ExecuteReader();
+                db_reader = detComm.ExecuteReader(behavior);
                 Result = "Ok";
             }
             catch (Exception ex)
@@ -271,48 +352,51 @@ namespace Kobdik.Dynamics
             return db_reader;
         }
 
-        public void Action(IDynaProp[] props, string cmd)
+        public IDynaField[] Action(IEnumerable<IDynaField> fields, string cmd)
         {
+            int cmd_bit = CmdBit.GetBit(cmd);
+            //cmd_bit: 4 - ins, 8 - upd, 16 - c16, 32 - c32, 64 - c64
             IDbCommand actComm = db_conn.CreateCommand();
             actComm.CommandType = CommandType.StoredProcedure;
             actComm.CommandText = String.Format("{0}_{1}", cmd, qry_name);
-            //fill update parameters
-            foreach (IDynaProp prop in props)
+            IDynaField[] inp_fields = fields.Where(fld => (fld.GetInpMask() & cmd_bit) > 0).ToArray<IDynaField>();
+            IDynaField[] out_fields = inp_fields.Where(fld => (fld.GetOutMask() & cmd_bit) > 0).ToArray<IDynaField>();
+            //fill input parameters
+            foreach (IDynaField field in inp_fields)
             {
                 IDbDataParameter param = actComm.CreateParameter();
-                param.ParameterName = String.Format("@{0}", prop.GetName());
-                param.DbType = prop.GetDbType();
-                param.Size = prop.GetSize();
-                param.Value = prop.Value;
-                if ((prop.GetFlags() & 8) > 0) param.Direction = ParameterDirection.InputOutput;
+                param.ParameterName = String.Format("@{0}", field.GetName());
+                param.DbType = field.GetDbType();
+                param.Size = field.GetSize();
+                param.Value = field.Value;
+                if ((field.GetOutMask() & cmd_bit) > 0) param.Direction = ParameterDirection.InputOutput;
                 actComm.Parameters.Add(param);
             }
             try
             {
                 db_conn.Open();
-                if (actComm.ExecuteNonQuery() == 0)
+                Rows_Affected = actComm.ExecuteNonQuery();
+                if (Rows_Affected < 0)
                 {
-                    if (actComm.Parameters.Contains("@Cause"))
+                    if (actComm.Parameters.Contains("@Message"))
                     {
-                        IDataParameter param = actComm.Parameters["@Cause"] as IDataParameter;
+                        IDataParameter param = actComm.Parameters["@Message"] as IDataParameter;
                         Result = param.Value as string;
                     }
                     else
                         Result = "Не удалось выполнить команду!";
                     //alarm with error message
-                    throw new Exception(Result);
+                    //throw new Exception(Result);
                 }
-                //obtain result from prop values
-                foreach (IDynaProp prop in props)
+                else
+                    Result = "Ok";
+                //obtain result from output fields
+                foreach (IDynaField field in out_fields)
                 {
-                    if ((prop.GetFlags() & 8) > 0)
-                    {
-                        string parameterName = String.Format("@{0}", prop.GetName());
-                        IDataParameter param = actComm.Parameters[parameterName] as IDataParameter;
-                        prop.Value = param.Value;
-                    }
+                    string paramName = String.Format("@{0}", field.GetName());
+                    IDataParameter param = actComm.Parameters[paramName] as IDataParameter;
+                    field.Value = param.Value;                    
                 }
-                Result = "Ok";
             }
             catch (Exception ex)
             {
@@ -322,6 +406,12 @@ namespace Kobdik.Dynamics
             {
                 db_conn.Close();
             }
+            return out_fields;
+        }
+
+        public int Rows_Affected
+        {
+            get; set;
         }
 
         public string Result
@@ -336,117 +426,78 @@ namespace Kobdik.Dynamics
         }
     }
 
-    public class DynaObject : IDynaObject, IDynaCommand
+    public class DynaRecord : IDynaRecord, IDataCommand
     {
         #region fields
         private string qry_name;
-        private byte qry_id, src_id, col_flags;
         private object lockObj;
         #endregion fields
 
         #region properties
-        public byte QryId { get { return qry_id; } }
-        //public string QryName { get { return qry_name; } }
-        public Dictionary<String, IDynaProp> PropDict { get; set; }
-        public Dictionary<String, IDynaProp> ParmDict { get; set; }
-        public List<IDynaProp> ReadList { get; set; }
-        public List<DynaObject> SlaveList { get; set; }
+        public string QryName { get { return qry_name; } }
+        public Dictionary<String, IDynaField> FieldDict { get; set; }
+        public List<IDynaField> ReadList { get; set; }
+        public List<DynaRecord> SlaveList { get; set; }
         public IStreamReader StreamReader { get; set; }
         public IStreamWriter StreamWriter { get; set; }
-        public IDbQuery Query { get; set; }
+        public IDataQuery Query { get; set; }
         public String Result { get; set; }
         #endregion
 
-        public DynaObject(QryDef qryDef)
+        public DynaRecord(QryDef qryDef)
         {
-            qry_id = qryDef.qry_id;
-            src_id = qryDef.col_def;
             qry_name = qryDef.qry_name;
-            // def 45 = Idn | Det | Out | Usr
-            if (qryDef.col_flags == 0) col_flags = 45;
-            else col_flags = qryDef.col_flags;
-            // select parameters
-            ParmDict = new Dictionary<String, IDynaProp>(4);
             //dynamic properties
-            PropDict = new Dictionary<String, IDynaProp>(16);
+            FieldDict = new Dictionary<String, IDynaField>(16);
             //ordinal properties
-            ReadList = new List<IDynaProp>(16);
+            ReadList = new List<IDynaField>(16);
             lockObj = new Object();
         }
 
-        public void CreateParm(PamDef pamDef)
+        public void CreateField(FldDef fldDef)
         {
-            IDynaProp prop = null;
-            switch (pamDef.pam_type)
+            IDynaField field = null;
+            switch (fldDef.fld_type)
             {
                 case 167: //varchar
-                    prop = new StringProp(pamDef.pam_name, DbType.String, pamDef.pam_size, 0);
+                    field = new StringField(fldDef.fld_name, DbType.String, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 175: //char[]->varchar
-                    prop = new StringProp(pamDef.pam_name, DbType.StringFixedLength, pamDef.pam_size, 0);
+                    field = new StringField(fldDef.fld_name, DbType.StringFixedLength, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
+                    break;
+                case 35: //text
+                    field = new TextField(fldDef.fld_name, DbType.AnsiString, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 48: //byte
-                    prop = new ByteProp(pamDef.pam_name, DbType.Byte, pamDef.pam_size, 0);
+                    field = new ByteField(fldDef.fld_name, DbType.Byte, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 52: //int16
-                    prop = new Int16Prop(pamDef.pam_name, DbType.Int16, pamDef.pam_size, 0);
+                    field = new Int16Field(fldDef.fld_name, DbType.Int16, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 56: //int32
-                    prop = new Int32Prop(pamDef.pam_name, DbType.Int32, pamDef.pam_size, 0);
+                    field = new Int32Field(fldDef.fld_name, DbType.Int32, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 40: //date
-                    prop = new DateProp(pamDef.pam_name, DbType.Date, pamDef.pam_size, 0);
+                    field = new DateField(fldDef.fld_name, DbType.Date, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 61: //datetime
-                    prop = new DateProp(pamDef.pam_name, DbType.DateTime, pamDef.pam_size, 0);
+                    field = new DateField(fldDef.fld_name, DbType.DateTime, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
                 case 62: //double
-                    prop = new DoubleProp(pamDef.pam_name, DbType.Double, pamDef.pam_size, 0);
+                    field = new DoubleField(fldDef.fld_name, DbType.Double, fldDef.fld_size, fldDef.inp_mask, fldDef.out_mask);
                     break;
             }
-            if (prop != null) ParmDict.Add(pamDef.pam_name, prop);
-        }
-
-        public void CreateProp(ColDef colDef)
-        {
-            IDynaProp prop = null;
-            switch (colDef.col_type)
+            if (field != null)
             {
-                case 167: //varchar
-                    prop = new StringProp(colDef.col_name, DbType.String, colDef.col_size, colDef.col_flags);
-                    break;
-                case 175: //char[]->varchar
-                    prop = new StringProp(colDef.col_name, DbType.StringFixedLength, colDef.col_size, colDef.col_flags);
-                    break;
-                case 48: //byte
-                    prop = new ByteProp(colDef.col_name, DbType.Byte, colDef.col_size, colDef.col_flags);
-                    break;
-                case 52: //int16
-                    prop = new Int16Prop(colDef.col_name, DbType.Int16, colDef.col_size, colDef.col_flags);
-                    break;
-                case 56: //int32
-                    prop = new Int32Prop(colDef.col_name, DbType.Int32, colDef.col_size, colDef.col_flags);
-                    break;
-                case 40: //date
-                    prop = new DateProp(colDef.col_name, DbType.Date, colDef.col_size, colDef.col_flags);
-                    break;
-                case 61: //datetime
-                    prop = new DateProp(colDef.col_name, DbType.DateTime, colDef.col_size, colDef.col_flags);
-                    break;
-                case 62: //double
-                    prop = new DoubleProp(colDef.col_name, DbType.Double, colDef.col_size, colDef.col_flags);
-                    break;
+                field.Value = fldDef.def_val;
+                FieldDict.Add(fldDef.fld_name, field);
             }
-            if (prop != null) PropDict.Add(colDef.col_name, prop);
         }
 
         public void ReadPropStream(Stream stream, string cmd)
         {
             string key;
             int i_type;
-            Dictionary<String, IDynaProp> dictionary;
-            if (cmd == "sel") dictionary = ParmDict;
-            else dictionary = PropDict;
             // read parameters
             StreamReader.Open(stream);
             while (StreamReader.Read())
@@ -456,73 +507,66 @@ namespace Kobdik.Dynamics
                 {
                     key = StreamReader.Value() as string;
                     StreamReader.Read(); // read Value
-                    if (dictionary.ContainsKey(key))
-                        dictionary[key].Value = StreamReader.Value();
+                    if (FieldDict.ContainsKey(key))
+                        FieldDict[key].Value = StreamReader.Value();
                 }
             }
             StreamReader.Close();
         }
 
-        private void ReadOrdinals(IDataReader reader, int flags)
+        private void ReadOrdinals(IDataReader reader, int cmd_bit)
         {
             string key;
-            IDynaProp prop;
-            int i_ord, i_count = reader.FieldCount;
+            IDynaField field;
             ReadList.Clear();
-            foreach (var p in PropDict.Values) p.Ordinal = -1;
+            foreach (var p in FieldDict.Values) p.Ordinal = -1;
+            int i_ord, i_count = reader.FieldCount;
             for (i_ord = 0; i_ord < i_count; i_ord++)
             {
                 key = reader.GetName(i_ord);
-                if (PropDict.Keys.Contains<string>(key))
+                if (FieldDict.Keys.Contains<string>(key))
                 {
-                    prop = PropDict[key];
-                    //read idn|sel fields for select
-                    //read idn|sel|det|usr 39=1+2+4+32 fields for detail
-                    if ((prop.GetFlags() & flags) > 0)
+                    field = FieldDict[key];
+                    //read 1 - for select
+                    //read 2 - for detail
+                    if ((field.GetOutMask() & cmd_bit) > 0)
                     {
-                        prop.Ordinal = i_ord;
-                        ReadList.Add(prop);
+                        field.Ordinal = i_ord;
+                        ReadList.Add(field);
                     }
                 }
             }
         }
 
-        public IDataReader Select()
+        public IDataReader Select(CommandBehavior behavior)
         {
-            IDataReader result = null;
-            IDynaProp[] parms = ParmDict.Values.ToArray();
-            result = Query.Select(parms);
-            if (result != null) ReadOrdinals(result, 3);
+            IDataReader result = Query.Select(FieldDict.Values, behavior);
+            if (result != null) ReadOrdinals(result, CmdBit.Sel);
             return result;
         }
 
-        public IDataReader Detail(int idn)
+        public IDataReader Detail(CommandBehavior behavior)
         {
-            IDataReader result = null;
-            IDynaProp prop = PropDict["Idn"];
-            prop.Value = idn;
-            result = Query.Detail(prop);
-            if (result != null) ReadOrdinals(result, 39);
+            IDataReader result = Query.Detail(FieldDict.Values, behavior);
+            if (result != null) ReadOrdinals(result, CmdBit.Det);
             return result;
         }
 
-        public IDynaProp[] Action(string cmd)
+        public IDynaField[] Action(string cmd)
         {
-            //default idn|det|out|usr 45=1+4+8+32
-            var actProps = PropDict.Values.Where(prop => (prop.GetFlags() & col_flags) > 0).ToArray();
-            Query.Action(actProps, cmd);
+            var out_fields = Query.Action(FieldDict.Values, cmd);
             Result = Query.Result;
-            //properties with returned values
-            return actProps.Where(prop => (prop.GetFlags() & 8) > 0).ToArray();
+            //fields with returned values
+            return out_fields;
         }
 
-        private void WriteRecord(IDataRecord record, List<IDynaProp> props, IPropWriter writer)
+        private void WriteRecord(IDataRecord record, List<IDynaField> fields, IPropWriter writer)
         {
-            foreach (var prop in props)
-                prop.WriteProp(record, writer);
+            foreach (var field in fields)
+                field.WriteProp(record, writer);
         }
 
-        public void SelectToStream(Stream stream)
+        public void SelectToStream(Stream stream, CommandBehavior behavior)
         {
             lock (lockObj)
             {
@@ -532,8 +576,8 @@ namespace Kobdik.Dynamics
                     StreamWriter.Open(stream);
                     StreamWriter.PushObj();
                     StreamWriter.PushArrProp("selected");
-                    DateTime fst = DateTime.Now;
-                    selReader = Select();
+                    //DateTime fst = DateTime.Now;
+                    selReader = Select(behavior);
                     if (selReader != null)
                     {
                         while (selReader.Read())
@@ -545,12 +589,12 @@ namespace Kobdik.Dynamics
                         }
                         selReader.Close();
                     };
-                    DateTime lst = DateTime.Now;
-                    TimeSpan ts = lst - fst;
+                    //DateTime lst = DateTime.Now;
+                    //TimeSpan ts = lst - fst;
                     StreamWriter.Pop();
                     StreamWriter.WriteProp("message", Query.Result);
-                    StreamWriter.WriteProp("sel_time", lst.ToShortTimeString());
-                    StreamWriter.WriteProp("time_ms", ts.Milliseconds);
+                    //StreamWriter.WriteProp("sel_time", lst.ToShortTimeString());
+                    //StreamWriter.WriteProp("time_ms", ts.Milliseconds);
                     StreamWriter.Pop();
                     Result = Query.Result;
                 }
@@ -567,7 +611,7 @@ namespace Kobdik.Dynamics
             }
         }
 
-        public void DetailToStream(Stream stream, int idn)
+        public void DetailToStream(Stream stream, CommandBehavior behavior)
         {
             lock (lockObj)
             {
@@ -577,7 +621,7 @@ namespace Kobdik.Dynamics
                 {
                     StreamWriter.Open(stream);
                     StreamWriter.PushObj();
-                    detReader = Detail(idn);
+                    detReader = Detail(behavior);
                     if (detReader != null)
                     {
                         StreamWriter.PushObjProp("det_row");
@@ -593,8 +637,8 @@ namespace Kobdik.Dynamics
                     {
                         StreamWriter.PushArrProp(slave.qry_name);
                         //qry_name is master column name
-                        slave.ParmDict[qry_name].Value = idn;
-                        selReader = slave.Select();
+                        slave.FieldDict[qry_name].Value = FieldDict["Idn"].Value;
+                        selReader = slave.Select(CommandBehavior.Default);
                         if (selReader != null)
                         {
                             while (selReader.Read())
@@ -637,12 +681,12 @@ namespace Kobdik.Dynamics
                     StreamWriter.PushObj();
                     StreamWriter.WriteProp("cmd", cmd);
                     //read out fields
-                    var outProps = Action(cmd);
+                    var outFields = Action(cmd);
                     if (Query.Result != "Ok") throw new Exception(Query.Result);
                     //write output parameters
                     StreamWriter.PushObjProp("out");
-                    foreach (IDynaProp prop in outProps)
-                        prop.WriteProp(StreamWriter);
+                    foreach (IDynaField field in outFields)
+                        field.WriteProp(StreamWriter);
                     StreamWriter.Pop();
                     StreamWriter.WriteProp("message", Query.Result);
                     StreamWriter.WriteProp("cmd_time", DateTime.Now.ToShortTimeString());
@@ -661,94 +705,82 @@ namespace Kobdik.Dynamics
             }
         }
 
-        private string GetParmsInfo()
+        private string GetFieldsInfo()
         {
             StringBuilder sb = new StringBuilder();
-            sb.AppendFormat("Id: {0}, Name: {1}\n", qry_id, qry_name);
-            foreach (var pair in ParmDict)
+            sb.AppendFormat("Query Name: {0}\n", qry_name);
+            foreach (var pair in FieldDict)
             {
-                IDynaProp prop = pair.Value;
-                sb.AppendFormat("Parm: {0}, Value: {1}\n", pair.Key, prop.Value);
+                IDynaField field = pair.Value;
+                sb.AppendFormat("Field: {0}, Value: {1}\n", pair.Key, field.Value);
             }
             sb.AppendFormat("Result: {0}\n", Result);
             return sb.ToString();
         }
 
-        private string GetPropsInfo()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendFormat("Id: {0}, Name: {1}\n", qry_id, qry_name);
-            foreach (var pair in PropDict)
-            {
-                IDynaProp prop = pair.Value;
-                sb.AppendFormat("Prop: {0}, Value: {1}\n", pair.Key, prop.Value);
-            }
-            sb.AppendFormat("Result: {0}\n", Result);
-            return sb.ToString();
-        }
-
-        private string GetColDef(IDynaProp prop)
+        private string GetFldDef(IDynaField field)
         {
             string result = "";
-            switch (prop.GetDbType())
+            DbType dbType = field.GetDbType();
+            switch (dbType)
             {
                 case DbType.String: //varchar
-                    result = String.Format("\t{0} varchar({1}) NOT NULL, ", prop.GetName(), prop.GetSize());
+                    result = String.Format("\t{0} varchar({1}) NOT NULL, ", field.GetName(), field.GetSize());
                     break;
                 case DbType.StringFixedLength: //char
-                    result = String.Format("\t{0} char({1}) NOT NULL, ", prop.GetName(), prop.GetSize());
+                    result = String.Format("\t{0} char({1}) NOT NULL, ", field.GetName(), field.GetSize());
                     break;
                 case DbType.Byte: //byte
-                    result = String.Format("\t{0} tinyint NOT NULL, ", prop.GetName());
+                    result = String.Format("\t{0} tinyint NOT NULL, ", field.GetName());
                     break;
                 case DbType.Int16: //int16
-                    result = String.Format("\t{0} smallint {1} NOT NULL, ", prop.GetName(), (prop.GetFlags() & 1) > 0 ? "IDENTITY(1,1)" : "");
+                    result = String.Format("\t{0} smallint {1} NOT NULL, ", field.GetName(), (field.GetOutMask() & 128) > 0 ? "IDENTITY(1,1)" : "");
                     break;
                 case DbType.Int32: //int32          
-                    result = String.Format("\t{0} int {1} NOT NULL, ", prop.GetName(), (prop.GetFlags() & 1) > 0 ? "IDENTITY(1,1)" : "");
+                    result = String.Format("\t{0} int {1} NOT NULL, ", field.GetName(), (field.GetOutMask() & 128) > 0 ? "IDENTITY(1,1)" : "");
                     break;
                 case DbType.Double: //double
-                    result = String.Format("\t{0} float NOT NULL, ", prop.GetName());
+                    result = String.Format("\t{0} float NOT NULL, ", field.GetName());
                     break;
                 case DbType.Date: //date
-                    result = String.Format("\t{0} date NOT NULL, ", prop.GetName());
+                    result = String.Format("\t{0} date NOT NULL, ", field.GetName());
                     break;
                 case DbType.DateTime: //datetime
-                    result = String.Format("\t{0} datetime NOT NULL, ", prop.GetName());
+                    result = String.Format("\t{0} datetime NOT NULL, ", field.GetName());
                     break;
             }
             return result;
         }
 
-        private string GetVarDef(IDynaProp prop)
+        private string GetVarDef(IDynaField field, int cmd_bit)
         {
             string result = "";
-            string str_out = (prop.GetFlags() & 8) > 0 ? " out" : "";
-            switch (prop.GetDbType())
+            string str_out = (field.GetOutMask() & cmd_bit) > 0 ? " out" : "";
+            switch (field.GetDbType())
             {
                 case DbType.String: //varchar
-                    result = String.Format("@{0} varchar({1}){2}, ", prop.GetName(), prop.GetSize(), str_out);
+                    result = String.Format("@{0} varchar({1}){2}, ", field.GetName(), field.GetSize(), str_out);
                     break;
                 case DbType.StringFixedLength: //char
-                    result = String.Format("@{0} char({1}){2}, ", prop.GetName(), prop.GetSize(), str_out);
+                    result = String.Format("@{0} char({1}){2}, ", field.GetName(), field.GetSize(), str_out);
                     break;
                 case DbType.Byte: //byte
-                    result = String.Format("@{0} tinyint{1}, ", prop.GetName(), str_out);
+                    result = String.Format("@{0} tinyint{1}, ", field.GetName(), str_out);
                     break;
                 case DbType.Int16: //int16
-                    result = String.Format("@{0} smallint{1}, ", prop.GetName(), str_out);
+                    result = String.Format("@{0} smallint{1}, ", field.GetName(), str_out);
                     break;
                 case DbType.Int32: //int32          
-                    result = String.Format("@{0} int{1}, ", prop.GetName(), str_out);
+                    result = String.Format("@{0} int{1}, ", field.GetName(), str_out);
                     break;
                 case DbType.Double: //double
-                    result = String.Format("@{0} float{1}, ", prop.GetName(), str_out);
+                    result = String.Format("@{0} float{1}, ", field.GetName(), str_out);
                     break;
                 case DbType.Date: //date
-                    result = String.Format("@{0} date{1}, ", prop.GetName(), str_out);
+                    result = String.Format("@{0} date{1}, ", field.GetName(), str_out);
                     break;
                 case DbType.DateTime: //datetime
-                    result = String.Format("@{0} datetime{1}, ", prop.GetName(), str_out);
+                    result = String.Format("@{0} datetime{1}, ", field.GetName(), str_out);
                     break;
             }
             return result;
@@ -759,9 +791,9 @@ namespace Kobdik.Dynamics
             StringBuilder sb = new StringBuilder();
             sb.AppendFormat("CREATE TABLE dbo.T_{0}(\n", qry_name);
             //выбрать только поля с установленными флагами
-            var props = PropDict.Values.Where(p => p.GetFlags() > 0);
-            foreach (var prop in props)
-                sb.AppendLine(GetColDef(prop));
+            var fields = FieldDict.Values.Where(p => p.GetOutMask() > 0);
+            foreach (var field in fields)
+                sb.AppendLine(GetFldDef(field));
             //убрать запятую в конце
             sb[sb.Length - 2] = ' ';
             sb[sb.Length - 1] = '\n';
@@ -774,28 +806,27 @@ namespace Kobdik.Dynamics
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendFormat("CREATE PROC dbo.sel_{0}\n", qry_name);
-            if (ParmDict.Count > 0)
+            var parms = FieldDict.Values.Where(fld => (fld.GetInpMask() & 1) > 0).ToArray();
+            if (parms.Count() > 0)
             {
-                var parms = ParmDict.Values;
                 foreach (var parm in parms)
-                    sb.Append(GetVarDef(parm));
+                    sb.Append(GetVarDef(parm, 1));
                 //убрать запятую в конце
                 sb[sb.Length - 2] = ' ';
                 sb[sb.Length - 1] = '\n';
             }
             sb.AppendLine("AS");
             sb.Append("SELECT ");
-            //выбрать только idn|sel поля
-            var props = PropDict.Values.Where(p => (p.GetFlags() & 3) > 0);
-            foreach (var prop in props)
-                sb.AppendFormat("{0}, ", prop.GetName());
+            //выбрать только sel поля
+            var fields = FieldDict.Values.Where(fld => (fld.GetOutMask() & 1) > 0);
+            foreach (var field in fields)
+                sb.AppendFormat("{0}, ", field.GetName());
             //убрать запятую в конце 
             sb[sb.Length - 2] = ' ';
             sb[sb.Length - 1] = '\n';
             sb.AppendFormat("FROM dbo.T_{0}\n", qry_name);
-            if (ParmDict.Count > 0)
+            if (parms.Count() > 0)
             {
-                var parms = ParmDict.Values;
                 //добавить закомментированными
                 sb.Append("--WHERE ");
                 foreach (var parm in parms)
@@ -811,19 +842,36 @@ namespace Kobdik.Dynamics
         private string GetDetailInfo()
         {
             StringBuilder sb = new StringBuilder();
-            string pt = (PropDict["Idn"].GetDbType() == DbType.Int16) ? "smallint" : "int";
-            sb.AppendFormat("CREATE PROC dbo.det_{0} @Idn {1}\n", qry_name, pt);
+            sb.AppendFormat("CREATE PROC dbo.det_{0}\n", qry_name);
+            var parms = FieldDict.Values.Where(fld => (fld.GetInpMask() & 2) > 0).ToArray();
+            if (parms.Count() > 0)
+            {
+                foreach (var parm in parms)
+                    sb.Append(GetVarDef(parm, 1));
+                //убрать запятую в конце
+                sb[sb.Length - 2] = ' ';
+                sb[sb.Length - 1] = '\n';
+            }
             sb.AppendLine("AS");
             sb.Append("SELECT ");
-            //выбрать только idn|sel поля
-            var props = PropDict.Values.Where(p => (p.GetFlags() & 3) > 0);
-            foreach (var prop in props)
-                sb.AppendFormat("{0}, ", prop.GetName());
+            //выбрать только det поля
+            var fields = FieldDict.Values.Where(fld => (fld.GetOutMask() & 2) > 0);
+            foreach (var field in fields)
+                sb.AppendFormat("{0}, ", field.GetName());
             //убрать запятую в конце 
             sb[sb.Length - 2] = ' ';
             sb[sb.Length - 1] = '\n';
             sb.AppendFormat("FROM dbo.T_{0}\n", qry_name);
-            sb.AppendLine("WHERE Idn=@Idn");
+            if (parms.Count() > 0)
+            {
+                //добавить закомментированными
+                sb.Append("--WHERE ");
+                foreach (var parm in parms)
+                    sb.AppendFormat("{0}=@{0}, ", parm.GetName());
+                //убрать запятую в конце
+                sb[sb.Length - 2] = ' ';
+                sb[sb.Length - 1] = '\n';
+            }
             sb.AppendLine("RETURN 0;");
             return sb.ToString();
         }
@@ -832,25 +880,25 @@ namespace Kobdik.Dynamics
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendFormat("CREATE PROC dbo.ins_{0}\n", qry_name);
-            var actProps = PropDict.Values.Where(p => (p.GetFlags() & 45) > 0);
-            foreach (var prop in actProps)
-                sb.Append(GetVarDef(prop));
+            var parms = FieldDict.Values.Where(fld => (fld.GetInpMask() & 4) > 0).ToArray();
+            foreach (var parm in parms)
+                sb.Append(GetVarDef(parm, 4));
             //убрать запятую в конце
             sb[sb.Length - 2] = ' ';
             sb[sb.Length - 1] = '\n';
             sb.AppendLine("AS");
             sb.AppendFormat("INSERT INTO dbo.T_{0} (", qry_name);
-            foreach (var prop in actProps.Skip(1))
-                sb.AppendFormat("{0}, ", prop.GetName());
-            //убрать запятую в конце 
+            foreach (var parm in parms.Skip(1))
+                sb.AppendFormat("{0}, ", parm.GetName());
+            //убрать запятую в конце
             sb[sb.Length - 2] = ')';
             sb.Append("\nVALUES (");
-            foreach (var prop in actProps.Skip(1))
-                sb.AppendFormat("@{0}, ", prop.GetName());
+            foreach (var parm in parms.Skip(1))
+                sb.AppendFormat("@{0}, ", parm.GetName());
             //убрать запятую в конце 
             sb[sb.Length - 2] = ')';
             sb[sb.Length - 1] = '\n';
-            string pt = (PropDict["Idn"].GetDbType() == DbType.Int16) ? "smallint" : "int";
+            string pt = (FieldDict["Idn"].GetDbType() == DbType.Int16) ? "smallint" : "int";
             sb.AppendFormat("SET @Idn=CAST(IDENT_CURRENT('dbo.T_{0}') AS {1})\n", qry_name, pt);
             sb.AppendLine("RETURN 0;");
             return sb.ToString();
@@ -860,15 +908,15 @@ namespace Kobdik.Dynamics
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendFormat("CREATE PROC dbo.upd_{0}\n", qry_name);
-            var actProps = PropDict.Values.Where(p => (p.GetFlags() & 45) > 0);
-            foreach (var prop in actProps)
-                sb.Append(GetVarDef(prop));
+            var parms = FieldDict.Values.Where(fld => (fld.GetInpMask() & 8) > 0).ToArray();
+            foreach (var parm in parms)
+                sb.Append(GetVarDef(parm, 8));
             //убрать запятую в конце
             sb[sb.Length - 2] = ' ';
             sb[sb.Length - 1] = '\n';
             sb.AppendLine("AS");
             sb.AppendFormat("UPDATE dbo.T_{0} SET\n", qry_name);
-            foreach (var prop in actProps.Skip(1))
+            foreach (var prop in parms.Skip(1))
                 sb.AppendFormat("{0}=@{0}, ", prop.GetName());
             //убрать запятую в конце 
             sb[sb.Length - 2] = ' ';
@@ -883,8 +931,7 @@ namespace Kobdik.Dynamics
             string result = "";
             switch (kind)
             {
-                case "parms": result = GetParmsInfo(); break;
-                case "props": result = GetPropsInfo(); break;
+                case "fields": result = GetFieldsInfo(); break;
                 case "create": result = GetCreateInfo(); break;
                 case "select": result = GetSelectInfo(); break;
                 case "detail": result = GetDetailInfo(); break;
@@ -892,6 +939,11 @@ namespace Kobdik.Dynamics
                 case "update": result = GetUpdateInfo(); break;
             }
             return result;
+        }
+
+        public int Rows_Affected
+        {
+            get => Query.Rows_Affected;
         }
 
         public void Dispose()

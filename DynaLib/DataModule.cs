@@ -60,17 +60,17 @@ namespace Kobdik.DataModule
                 //qryDict
                 qryComm = dbConn.CreateCommand();
                 qryComm.CommandType = CommandType.Text;
-                qryComm.CommandText = "select Qry_Id, Qry_Name, Qry_Head, Col_Def, Col_Flag from T_QryDict";
+                qryComm.CommandText = "select Qry_Name, Qry_Head, Qry_Lord, Fld_Dict, Qry_Mask from T_QryDict";
                 qryReader = qryComm.ExecuteReader();
                 qryList.Clear();
                 while (qryReader.Read())
                 {
                     QryDef qryDef = new QryDef();
-                    qryDef.qry_id = qryReader.GetByte(0);
-                    qryDef.qry_name = qryReader.GetString(1);
-                    qryDef.qry_head = qryReader.GetString(2);
-                    qryDef.col_def = qryReader.GetByte(3);
-                    qryDef.col_flags = qryReader.GetByte(4);
+                    qryDef.qry_name = qryReader.GetString(0);
+                    qryDef.qry_head = qryReader.GetString(1);
+                    qryDef.qry_lord = qryReader.GetString(2);
+                    qryDef.fld_dict = qryReader.GetString(3);
+                    qryDef.qry_mask = qryReader.GetInt32(4);
                     qryList.Add(qryDef);
                 }
                 qryReader.Close();
@@ -122,7 +122,7 @@ namespace Kobdik.DataModule
                 DynaRecord dynaRecord = null;
                 //поискать в кэше объектов
                 if (recDict.TryGetValue(key, out dynaRecord)) return dynaRecord;
-                //иначе создать DynaObject
+                //иначе создать DynaRecord
                 QryDef qryDef = qryList.Find(qry => qry.qry_name == key);
                 if (qryDef == null)
                 {
@@ -139,7 +139,7 @@ namespace Kobdik.DataModule
                     StreamWriter = new TextStreamWriter()
                 };
                 //загрузить описания всех колонок
-                foreach (FldDef fldDef in fldList.Where(fld => fld.qry_name == key))
+                foreach (FldDef fldDef in fldList.Where(fld => fld.qry_name == qryDef.fld_dict))
                     dynaRecord.CreateField(fldDef);
                 //добавить в кэш объектов
                 recDict.Add(key, dynaRecord);

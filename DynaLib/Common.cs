@@ -9,10 +9,9 @@ namespace Kobdik.Common
 
     public class QryDef
     {
-        public byte qry_id, master, col_def;
-        public string qry_name, qry_head;
-        public byte qry_flags, col_flags;
-        public byte[] groups;
+        public string qry_name, qry_head, qry_lord, fld_dict;
+        public int qry_mask;
+        //public byte[] groups;
     }
 
     public class FldDef

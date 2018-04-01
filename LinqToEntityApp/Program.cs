@@ -24,9 +24,9 @@ namespace LinqToEntityApp
                 {
                     case ConsoleKey.J: TestJ(); break;
                     case ConsoleKey.M: TestM_Avg(33); break;
-                    case ConsoleKey.D1: TestR1_Avg(33); break;
-                    case ConsoleKey.D2: TestR4_Avg(33); break;
-                    case ConsoleKey.D3: TestR8_Avg(33); break;
+                    case ConsoleKey.D1: TestR01_Avg(33); break;
+                    case ConsoleKey.D2: TestR04_Avg(33); break;
+                    case ConsoleKey.D3: TestR08_Avg(33); break;
                     case ConsoleKey.D4: TestR16_Avg(33); break;
                 }
             }
@@ -130,7 +130,7 @@ namespace LinqToEntityApp
             }
         }
 
-        private static void TestR1_Avg(int max)
+        private static void TestR01_Avg(int max)
         {
             timeList.Clear();
             Console.WriteLine();
@@ -139,12 +139,12 @@ namespace LinqToEntityApp
             stopWatch.Start();
             for (int i = 0; i < max; i++)
             {
-                TestR1(i);
+                TestR01(i);
             }
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
             long m_lst = GC.GetTotalMemory(false);
-            Console.WriteLine("Done R1. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
+            Console.WriteLine("Done R01. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
             Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
             using (FileStream fs = new FileStream("TestR1_EF.txt", FileMode.Create))
             {
@@ -158,13 +158,13 @@ namespace LinqToEntityApp
             }
         }
 
-        private static void TestR4_Avg(int max)
+        private static void TestR04_Avg(int max)
         {
             timeList.Clear();
             Console.WriteLine();
             for (int i = 0; i < max; i++)
             {
-                TestR4(i);
+                TestR04(i);
             }
             Console.WriteLine("Done R4. Среднее время {0} ms.", timeList.Skip(1).Average());
             using (FileStream fs = new FileStream("TestR4_EF.txt", FileMode.Create))
@@ -179,13 +179,13 @@ namespace LinqToEntityApp
             }
         }
 
-        private static void TestR8_Avg(int max)
+        private static void TestR08_Avg(int max)
         {
             timeList.Clear();
             Console.WriteLine();
             for (int i = 0; i < max; i++)
             {
-                TestR8(i);
+                TestR08(i);
             }
             Console.WriteLine("Done R8. Среднее время {0} ms.", timeList.Skip(1).Average());
             using (FileStream fs = new FileStream("TestR8_EF.txt", FileMode.Create))
@@ -222,7 +222,7 @@ namespace LinqToEntityApp
         }
 
 
-        private static void TestR1(int num)
+        private static void TestR01(int num)
         {
             using (var context = new TestModel())
             {
@@ -251,7 +251,7 @@ namespace LinqToEntityApp
             }
         }
 
-        private static void TestR4(int num)
+        private static void TestR04(int num)
         {
             using (var context = new TestModel())
             {
@@ -259,12 +259,12 @@ namespace LinqToEntityApp
                 double sum_gt = 0;
                 Stopwatch stopWatch = new Stopwatch();
                 stopWatch.Start();
-                var query = from invo in context.InvoR4s
+                var query = from invo in context.InvoR04s
                             where invo.Val > 0
                             orderby invo.Dt_Invo
                             select invo;
                 //LINQ to Entities
-                foreach (InvoR4 invo in query)
+                foreach (InvoR04 invo in query)
                 {
                     count++;
                     sum_gt += invo.Val;
@@ -276,7 +276,7 @@ namespace LinqToEntityApp
             }
         }
 
-        private static void TestR8(int num)
+        private static void TestR08(int num)
         {
             using (var context = new TestModel())
             {
@@ -284,12 +284,12 @@ namespace LinqToEntityApp
                 double sum_gt = 0;
                 Stopwatch stopWatch = new Stopwatch();
                 stopWatch.Start();
-                var query = from invo in context.InvoR8s
+                var query = from invo in context.InvoR08s
                             where invo.Val > 0
                             orderby invo.Dt_Invo
                             select invo;
                 //LINQ to Entities
-                foreach (InvoR8 invo in query)
+                foreach (InvoR08 invo in query)
                 {
                     count++;
                     sum_gt += invo.Val;

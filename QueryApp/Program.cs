@@ -34,7 +34,7 @@ namespace QueryApp
             dataMod.GetConnection = () => new SqlConnection(connString);
             dataMod.LoadMeta();
             Console.WriteLine("Meta loaded.");
-            Console.WriteLine("Test Linq to Objects. Esc - to exit. Commands: J, M, P, Q, U, V");
+            Console.WriteLine("Test QueryApp. Esc - to exit. Commands: J, M, P, Q, 2, 3, 4, U, V");
             ConsoleKeyInfo cki;
             do
             {
@@ -45,6 +45,9 @@ namespace QueryApp
                     case ConsoleKey.J: TestJ(); break;
                     case ConsoleKey.M: TestM_Avg("InvoCut", 33); break;
                     case ConsoleKey.Q: TestQ_Avg("InvoCut", 33); break;
+                    case ConsoleKey.D2: TestQ_Avg("InvoR04", 33); break;
+                    case ConsoleKey.D3: TestQ_Avg("InvoR08", 33); break;
+                    case ConsoleKey.D4: TestQ_Avg("InvoR16", 33); break;
                     case ConsoleKey.V: TestV(); break;
                     case ConsoleKey.U: TestU(); break;
                 }
@@ -239,7 +242,7 @@ namespace QueryApp
             Console.WriteLine();
             IDynaRecord dynaRecord = dataMod.GetDynaRecord("Invo");
             dynaRecord.FieldDict["Dt_Fst"].Value = "2017.04.01";
-            dynaRecord.FieldDict["Dt_Lst"].Value = "2017.04.05";
+            dynaRecord.FieldDict["Dt_Lst"].Value = "2017.04.04";
             dynaRecord.FieldDict["Note"].Value = @"
 Апрель! Апрель!
 На дворе звенит капель.

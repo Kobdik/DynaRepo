@@ -55,8 +55,8 @@ namespace LinqToEntityApp.EF
         public string Note { get; set; }
     }
 
-    [Table("T_InvoR4")]
-    public partial class InvoR4
+    [Table("T_InvoR04")]
+    public partial class InvoR04
     {
         [Key]
         public int Idn { get; set; }
@@ -71,8 +71,8 @@ namespace LinqToEntityApp.EF
         public string Note { get; set; }
     }
 
-    [Table("T_InvoR8")]
-    public partial class InvoR8
+    [Table("T_InvoR08")]
+    public partial class InvoR08
     {
         [Key]
         public int Idn { get; set; }

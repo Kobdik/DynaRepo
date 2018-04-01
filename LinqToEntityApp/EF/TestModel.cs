@@ -13,9 +13,9 @@ namespace LinqToEntityApp.EF
 
         public virtual DbSet<Invo> Invos { get; set; }
 
-        public virtual DbSet<InvoR4> InvoR4s { get; set; }
+        public virtual DbSet<InvoR04> InvoR04s { get; set; }
 
-        public virtual DbSet<InvoR8> InvoR8s { get; set; }
+        public virtual DbSet<InvoR08> InvoR08s { get; set; }
 
         public virtual DbSet<InvoR16> InvoR16s { get; set; }
 

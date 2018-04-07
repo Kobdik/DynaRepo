@@ -34,20 +34,22 @@ namespace QueryApp
             dataMod.GetConnection = () => new SqlConnection(connString);
             dataMod.LoadMeta();
             Console.WriteLine("Meta loaded.");
-            Console.WriteLine("Test QueryApp. Esc - to exit. Commands: J, M, P, Q, 2, 3, 4, U, V");
+            Console.WriteLine("Test QueryApp. Esc - to exit. Commands: J, M, P, Q, 2, 3, 4, R, U, V");
             ConsoleKeyInfo cki;
             do
             {
                 cki = Console.ReadKey();
                 switch (cki.Key)
                 {
-                    case ConsoleKey.P: TestP(); break;
+                    case ConsoleKey.S: TestS(); break;
                     case ConsoleKey.J: TestJ(); break;
                     case ConsoleKey.M: TestM_Avg("InvoCut", 33); break;
-                    case ConsoleKey.Q: TestQ_Avg("InvoCut", 33); break;
+                    case ConsoleKey.Q: TestQ_Avg("InvoCut", 3); break;
                     case ConsoleKey.D2: TestQ_Avg("InvoR04", 33); break;
                     case ConsoleKey.D3: TestQ_Avg("InvoR08", 33); break;
                     case ConsoleKey.D4: TestQ_Avg("InvoR16", 33); break;
+                    case ConsoleKey.P: TestP_Avg("InvoCut", 33); break;
+                    case ConsoleKey.R: TestR_Avg("InvoCut", 33); break;
                     case ConsoleKey.V: TestV(); break;
                     case ConsoleKey.U: TestU(); break;
                 }
@@ -87,7 +89,7 @@ namespace QueryApp
 
         }
 
-        static void TestP()
+        static void TestS()
         {
             IDynaRecord dynaRecord = dataMod.GetDynaRecord("Invoice");
             using (FileStream wfs = new FileStream("Stored_Procs.txt", FileMode.Create))
@@ -101,7 +103,6 @@ namespace QueryApp
                 sw.Close();
             }
         }
-
 
         static void TestJ()
         {
@@ -117,14 +118,14 @@ namespace QueryApp
                 dynaRecord.ReadPropStream(rfs, "sel");
             }
             */
-            using (Stream wfs = new FileStream("InvoCut.json", FileMode.Create), bfs = new BufferedStream(wfs, 4 * 1024))
+            using (Stream fs = new FileStream("InvoCut.json", FileMode.Create), bs = new BufferedStream(fs, 16 * 1024))
             {
-                dynaRecord.SelectToStream(bfs, CommandBehavior.SequentialAccess);
+                dynaRecord.SelectToStream(bs, CommandBehavior.SequentialAccess);
             }
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
             long m_lst = GC.GetTotalMemory(false);
-            //вся таблица выгружается в json-файл размером 381Kb за 18 - 27 ms (TextStreamWriter), лучшее 15 ms
+            //вся таблица выгружается в json-файл размером 381Kb за 14 - 27 ms (TextStreamWriter), лучшее 15 ms
             //вся таблица выгружается в json-файл размером 381Kb за 35 - 40 ms (JsonStreamWriter),
             //Core EF читает и пишет данные в поток за 78 - 90 ms
             Console.WriteLine("Done J: Время {0} ms", ts.Milliseconds);
@@ -145,10 +146,10 @@ namespace QueryApp
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
             long m_lst = GC.GetTotalMemory(false);
-            //Время 12.5 ms на чтение и запись в поток (TextStreamWriter)
+            //Время 12.3 ms на чтение и запись в поток (TextStreamWriter)
             //Время 12.8 ms на чтение и запись в поток (JsonStreamWriter)
-            //в 2.4 раз быстрее, чем EF только читает
-            //Core EF читает и пишет за 76 ms
+            //Core EF читает  тест Q за 24 ms
+            //Core EF читает и пишет за 64 ms
             Console.WriteLine("Done M. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
             Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
             using (FileStream fs = new FileStream("TestM_DL.txt", FileMode.Create))
@@ -192,6 +193,9 @@ namespace QueryApp
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
             long m_lst = GC.GetTotalMemory(false);
+            //CoreDL при чтении всех свойств 12.5 ms
+            //    DL при чтении всех свойств 14.2 ms
+            //CoreEF при чтении всех свойств 24.4 ms
             Console.WriteLine("Done Q. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
             Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
             using (FileStream fs = new FileStream("TestQ_DL.csv", FileMode.Create))
@@ -211,6 +215,7 @@ namespace QueryApp
         {
             int count = 0;
             double sum_gt = 0;
+            int idn; DateTime dt; string note;
             //long m_fst = GC.GetTotalMemory(false);
             Stopwatch stopWatch = new Stopwatch();
             stopWatch.Start();
@@ -226,13 +231,143 @@ namespace QueryApp
             foreach (Invo invo in query)
             {
                 count++;
+                idn = invo.Idn;
+                dt = invo.Dt_Invo;
                 sum_gt += invo.Val;
+                note = invo.Note;
             }
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
             //long m_lst = GC.GetTotalMemory(false);
-            //Console.WriteLine("Q {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+            Console.WriteLine("Q {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
             //Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
+            timeList.Add(ts.Milliseconds);
+            valList.Add(sum_gt);
+        }
+
+        static void TestP_Avg(string queryName, int max)
+        {
+            valList.Clear();
+            timeList.Clear();
+            Console.WriteLine();
+            long m_fst = GC.GetTotalMemory(false);
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            for (int i = 0; i < max; i++)
+            {
+                TestP(queryName, i);
+            }
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
+            long m_lst = GC.GetTotalMemory(false);
+            //CoreDL P при чтении всех свойств  ms
+            //    DL P при чтении всех свойств  4.0 ms memory ~270 kb
+            //CoreEF Q при чтении всех свойств 24.4 ms
+            Console.WriteLine("Done P. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
+            Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
+            using (FileStream fs = new FileStream("TestQ_DL.csv", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                sr.WriteLine("Query: {0}", queryName);
+                for (int i = 0; i < max; i++)
+                {
+                    sr.WriteLine("{0};{1}", timeList[i], valList[i]);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+        static void TestP(string queryName, int num)
+        {
+            int count = 0;
+            double sum_gt = 0;
+            int idn; DateTime dt; string note;
+            long m_fst = GC.GetTotalMemory(false);
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            IDynaRecord dynaRecord = dataMod.GetDynaRecord(queryName);
+            //Iterate        
+            if (dynaRecord == null) return;
+            dynamic d = dynaRecord.Ordinal();
+            int IDN = d.Idn, DT_INVO = d.Dt_Invo, VAL = d.Val, NOTE = d.Note;
+            if (IDN == -1 || DT_INVO == -1 || VAL == -1 || NOTE == -1) return;
+            //Iterate 10 ms by click        
+            foreach (var r in dynaRecord)
+            //foreach (dynamic d in dynaReader)
+            {
+                count++;
+                idn = r.GetInt32(IDN);
+                dt = r.GetDateTime(DT_INVO);
+                sum_gt += r.GetDouble(VAL);
+                note = r.GetString(NOTE);
+            }
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
+            long m_lst = GC.GetTotalMemory(false);
+            Console.WriteLine("P {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+            Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
+            timeList.Add(ts.Milliseconds);
+            valList.Add(sum_gt);
+        }
+
+        static void TestR_Avg(string queryName, int max)
+        {
+            valList.Clear();
+            timeList.Clear();
+            Console.WriteLine();
+            long m_fst = GC.GetTotalMemory(false);
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            for (int i = 0; i < max; i++)
+            {
+                TestR(queryName, i);
+            }
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
+            long m_lst = GC.GetTotalMemory(false);
+            //CoreDL R при чтении всех свойств  ms
+            //    DL R при чтении всех свойств  6.0 ms memory ~594 kb
+            //CoreEF Q при чтении всех свойств 24.4 ms
+            Console.WriteLine("Done R. Среднее время {0} ms. Всего {1} sec, {2} ms", timeList.Skip(1).Average(), ts.Seconds, ts.Milliseconds);
+            Console.WriteLine("Выделено памяти {0} байт", m_lst - m_fst);
+            using (FileStream fs = new FileStream("TestQ_DL.csv", FileMode.Create))
+            {
+                StreamWriter sr = new StreamWriter(fs);
+                sr.WriteLine("Query: {0}", queryName);
+                for (int i = 0; i < max; i++)
+                {
+                    sr.WriteLine("{0};{1}", timeList[i], valList[i]);
+                }
+                sr.Flush();
+                sr.Close();
+            }
+        }
+
+        static void TestR(string queryName, int num)
+        {
+            int count = 0;
+            double sum_gt = 0;
+            int idn; DateTime dt; string note;
+            long m_fst = GC.GetTotalMemory(false);
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();
+            IDynaRecord dynaRecord = dataMod.GetDynaRecord(queryName);
+            DynaReader dynaReader = new DynaReader(dynaRecord);
+            //Iterate  11 ms by click
+            foreach (dynamic d in dynaReader)
+            {
+                count++;
+                idn = d.Idn;
+                dt = d.Dt_Invo;
+                sum_gt += d.Val;
+                note = d.Note;
+            }
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
+            long m_lst = GC.GetTotalMemory(false);
+            Console.WriteLine("R {0}: Кол-во={1}, Сумма={2}. Время {3} ms.", num, count, sum_gt, ts.Milliseconds);
+            Console.WriteLine("Выделено памяти {0}", m_lst - m_fst);
             timeList.Add(ts.Milliseconds);
             valList.Add(sum_gt);
         }

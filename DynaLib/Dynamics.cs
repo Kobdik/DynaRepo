@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using Kobdik.Common;
 
@@ -31,7 +34,7 @@ namespace Kobdik.Dynamics
         public int GetOutMask() { return out_flags; }
         public abstract Object Value { get; set; }
         public int Ordinal { get; set; }
-        public abstract void ReadProp(IDataRecord record);
+        public abstract object GetData(IDataRecord record);
         public abstract void WriteProp(IDataRecord record, IPropWriter writer);
         public abstract void WriteProp(IPropWriter writer);
     }
@@ -45,9 +48,9 @@ namespace Kobdik.Dynamics
             fld_type = typeof(string);
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetString(Ordinal);
+            return record.GetString(Ordinal);
         }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
@@ -86,9 +89,9 @@ namespace Kobdik.Dynamics
             fld_buff = new byte[size];
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetString(Ordinal);
+            return record.GetString(Ordinal);
         }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
@@ -131,9 +134,9 @@ namespace Kobdik.Dynamics
             fld_type = typeof(byte);
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetByte(Ordinal);
+            return record.GetByte(Ordinal);
         }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
@@ -162,9 +165,9 @@ namespace Kobdik.Dynamics
             fld_type = typeof(Int16);
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetInt16(Ordinal);
+            return record.GetInt16(Ordinal);
         }
 
         public override void WriteProp(IDataRecord record, IPropWriter writer)
@@ -193,9 +196,9 @@ namespace Kobdik.Dynamics
             fld_type = typeof(Int32);
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetInt32(Ordinal);
+            return record.GetInt32(Ordinal);
         }
 
         public override void WriteProp(IDataRecord reader, IPropWriter writer)
@@ -224,9 +227,9 @@ namespace Kobdik.Dynamics
             fld_type = typeof(DateTime);
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetDateTime(Ordinal);
+            return record.GetDateTime(Ordinal);
         }
 
         public override void WriteProp(IDataRecord reader, IPropWriter writer)
@@ -255,9 +258,9 @@ namespace Kobdik.Dynamics
             fld_type = typeof(double);
         }
 
-        public override void ReadProp(IDataRecord record)
+        public override object GetData(IDataRecord record)
         {
-            fld_value = record.GetDouble(Ordinal);
+            return record.GetDouble(Ordinal);
         }
 
         public override void WriteProp(IDataRecord reader, IPropWriter writer)
@@ -426,11 +429,46 @@ namespace Kobdik.Dynamics
         }
     }
 
-    public class DynaRecord : IDynaRecord, IDataCommand
+    public class DynamicOrdinal : DynamicObject
+    {
+        private IDataReader _dbreader;
+
+        public DynamicOrdinal(IDataReader dbreader)
+        {
+            _dbreader = dbreader;
+        }
+
+        public override bool TryGetMember(GetMemberBinder binder, out object result)
+        {
+            int i_ord = -1;
+            try
+            {
+                i_ord = _dbreader.GetOrdinal(binder.Name);
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                result = i_ord;
+            }
+            return true;
+        }
+
+        public override bool TrySetMember(SetMemberBinder binder, object value)
+        {
+            return false;
+        }
+    }
+
+    public class DynaRecord : IDynaRecord, IDataCommand, IEnumerator<IDataRecord>, IEnumerable<IDataRecord>
     {
         #region fields
         private string qry_name;
         private object lockObj;
+        private IDataRecord current;
+        private IDataReader _reader;
+        private DynamicObject ordinal;
         #endregion fields
 
         #region properties
@@ -452,6 +490,47 @@ namespace Kobdik.Dynamics
             //ordinal properties
             ReadList = new List<IDynaField>(16);
             lockObj = new Object();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            //throw new NotImplementedException();
+            return ((IEnumerable<IDataRecord>)this).GetEnumerator();
+        }
+
+        public IEnumerator<IDataRecord> GetEnumerator()
+        {
+            if (_reader == null || _reader.IsClosed) Reset();
+            return this;
+        }
+
+        object IEnumerator.Current => current;
+
+        public IDataRecord Current => current;
+
+        public bool MoveNext()
+        {
+            if (_reader == null) return false;
+            bool hasNext = _reader.Read();
+            if (!hasNext) _reader.Close();
+            //move ahead and update current
+            return hasNext;
+        }
+
+        public void Reset()
+        {
+            _reader = Query.Select(FieldDict.Values, CommandBehavior.SequentialAccess);
+            current = _reader;
+            if (_reader != null)
+                ordinal = new DynamicOrdinal(_reader);
+            else
+                ordinal = null;
+        }
+
+        public DynamicObject Ordinal()
+        {
+            Reset();
+            return ordinal;
         }
 
         public void CreateField(FldDef fldDef)
@@ -560,9 +639,9 @@ namespace Kobdik.Dynamics
             return out_fields;
         }
 
-        private void WriteRecord(IDataRecord record, List<IDynaField> fields, IPropWriter writer)
+        public void WriteRecord(IDataRecord record, IPropWriter writer)
         {
-            foreach (var field in fields)
+            foreach (var field in ReadList)
                 field.WriteProp(record, writer);
         }
 
@@ -584,7 +663,7 @@ namespace Kobdik.Dynamics
                         {
                             //if (token.IsCancellationRequested) break;
                             StreamWriter.PushObj();
-                            WriteRecord(selReader, ReadList, StreamWriter);
+                            WriteRecord(selReader, StreamWriter);
                             StreamWriter.Pop();
                         }
                         selReader.Close();
@@ -626,7 +705,7 @@ namespace Kobdik.Dynamics
                     {
                         StreamWriter.PushObjProp("det_row");
                         if (detReader.Read())
-                            WriteRecord(detReader, ReadList, StreamWriter);
+                            WriteRecord(detReader, StreamWriter);
                         StreamWriter.Pop();
                         detReader.Close();
                     };
@@ -644,7 +723,7 @@ namespace Kobdik.Dynamics
                             while (selReader.Read())
                             {
                                 StreamWriter.PushObj();
-                                WriteRecord(selReader, slave.ReadList, StreamWriter);
+                                slave.WriteRecord(selReader, StreamWriter);
                                 StreamWriter.Pop();
                             }
                             selReader.Close();
@@ -703,6 +782,11 @@ namespace Kobdik.Dynamics
                     StreamWriter?.Close();
                 }
             }
+        }
+
+        public int Rows_Affected
+        {
+            get => Query.Rows_Affected;
         }
 
         private string GetFieldsInfo()
@@ -939,11 +1023,6 @@ namespace Kobdik.Dynamics
                 case "update": result = GetUpdateInfo(); break;
             }
             return result;
-        }
-
-        public int Rows_Affected
-        {
-            get => Query.Rows_Affected;
         }
 
         public void Dispose()

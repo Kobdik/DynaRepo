@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Dynamic;
 using System.IO;
 
 namespace Kobdik.Common
@@ -86,9 +87,9 @@ namespace Kobdik.Common
         int GetSize();
         int GetInpMask();
         int GetOutMask();
-        Object Value { get; set; }
         int Ordinal { get; set; }
-        void ReadProp(IDataRecord record);
+        object Value { get; set; }
+        object GetData(IDataRecord record);
         void WriteProp(IDataRecord record, IPropWriter writer);
         void WriteProp(IPropWriter writer);
     }
@@ -106,11 +107,13 @@ namespace Kobdik.Common
     {
         IDataReader Select(CommandBehavior behavior = CommandBehavior.Default);
         IDataReader Detail(CommandBehavior behavior = CommandBehavior.Default);
+        void WriteRecord(IDataRecord record, IPropWriter writer);
+        //void ReadRecord(IDataRecord record); //DynaReader
         IDynaField[] Action(string cmd);
         int Rows_Affected { get; }
     }
 
-    public interface IDynaRecord : IDisposable
+    public interface IDynaRecord : IEnumerable<IDataRecord>, IDisposable
     {
         Dictionary<String, IDynaField> FieldDict { get; }
         void ReadPropStream(Stream stream, string cmd);
@@ -119,6 +122,7 @@ namespace Kobdik.Common
         void ActionToStream(Stream stream, string cmd);
         IStreamReader StreamReader { get; }
         IStreamWriter StreamWriter { get; }
+        DynamicObject Ordinal();
         string GetInfo(string kind);
         string Result { get; }
     }

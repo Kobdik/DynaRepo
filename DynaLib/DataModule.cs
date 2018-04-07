@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -145,6 +146,287 @@ namespace Kobdik.DataModule
                 recDict.Add(key, dynaRecord);
                 return dynaRecord;
             }
+        }
+
+    }
+
+    public class DynamicRecord : DynamicObject
+    {
+        private IDynaRecord _record;
+        private IDataRecord _reader;
+
+        public DynamicRecord(IDynaRecord dynaRecord, IDataRecord dataRecord)
+        {
+            _record = dynaRecord;
+            _reader = dataRecord;
+        }
+
+        public override bool TryGetMember(GetMemberBinder binder, out object result)
+        {
+            result = null;
+            try
+            {
+                IDynaField field = _record.FieldDict[binder.Name];
+                result = field.GetData(_reader);
+            }
+            catch (Exception)
+            {
+            }
+            return true;
+        }
+
+        public override bool TrySetMember(SetMemberBinder binder, object value)
+        {
+            return false;
+        }
+    }
+
+    public class DynaReader : IEnumerable<DynamicRecord>, IEnumerator<DynamicRecord>, IEnumerable, IEnumerator
+    {
+        //public NotifyEvent OnReset;
+        private IDynaRecord _dynaRecord;
+        private IDataReader _dbreader;
+        private DynamicRecord _current;
+        private IDataCommand _dataCmd;
+
+        public DynaReader(IDynaRecord dynaRecord)
+        {
+            _dynaRecord = dynaRecord;
+            _dataCmd = dynaRecord as IDataCommand;
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            throw new NotImplementedException();
+            //return ((IEnumerable<IDataReader>)this).GetEnumerator();
+        }
+
+        public IEnumerator<DynamicRecord> GetEnumerator()
+        {
+            if (_dbreader == null || _dbreader.IsClosed) Reset();
+            return this;
+        }
+
+        object IEnumerator.Current => _current;
+
+        public DynamicRecord Current => _current;
+
+        public bool MoveNext()
+        {
+            bool hasNext = _dbreader.Read();
+            //move ahead and update current
+            if (!hasNext) _dbreader.Close();
+            return hasNext;
+        }
+
+        public void Reset()
+        {
+            string result = "Reset";
+            try
+            {
+                _dbreader = _dataCmd.Select(CommandBehavior.SequentialAccess);
+                _current = new DynamicRecord(_dynaRecord, _dbreader);
+                result = "Ok";
+            }
+            catch (Exception ex)
+            {
+                result = ex.Message;
+            }
+            finally
+            {
+                //OnReset?.Invoke(result);
+            }
+        }
+
+        public void Dispose()
+        {
+            _dynaRecord.Dispose();
+        }
+
+    }
+
+    public class PropMap
+    {
+        public IDynaField Field => dynaField;
+        public MethodInfo GetMethod { get; set; }
+        public MethodInfo SetMethod { get; set; }
+        private object[] parameters;
+        private IDynaField dynaField;
+
+        public PropMap(IDynaField field)
+        {
+            dynaField = field;
+            parameters = new object[1];
+        }
+
+        public void ReadToObject(IDataReader reader, object obj)
+        {
+            //reader -> object prop
+            if (SetMethod != null)
+            {
+                parameters[0] = dynaField.GetData(reader);
+                SetMethod.Invoke(obj, parameters);
+            }
+        }
+
+        public void GetFromObject(object obj)
+        {
+            //object prop -> field
+            if (GetMethod != null)
+                dynaField.Value = GetMethod.Invoke(obj, null);
+        }
+
+        public void SetToObject(object obj)
+        {
+            //field -> object prop
+            if (SetMethod != null)
+            {
+                parameters[0] = dynaField.Value;
+                SetMethod.Invoke(obj, parameters);
+            }
+        }
+
+    }
+
+    public abstract class DynaQuery<T> : IEnumerable<T>, IEnumerator<T>, IEnumerable, IEnumerator
+    {
+        protected IDynaRecord _dynaRecord;
+        protected IDataReader _dataReader;
+        protected List<PropMap> propMaps;
+        protected List<PropMap> sel_Maps;
+        private IDataCommand _dataCmd;
+        private List<T> list;
+        private T _current;
+        private Type _type;
+        private bool cached, dbread;
+        private int i_current;
+
+        public DynaQuery(IDynaRecord dynaRecord)
+        {
+            _dynaRecord = dynaRecord;
+            _dataCmd = dynaRecord as IDataCommand;
+            _current = Activator.CreateInstance<T>();
+            _type = _current.GetType();
+            propMaps = new List<PropMap>(16);
+            sel_Maps = new List<PropMap>(16);
+            list = new List<T>(1024);
+            cached = false;
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            //throw new NotImplementedException();
+            return ((IEnumerable<T>)this).GetEnumerator();
+        }
+
+        public IEnumerator<T> GetEnumerator()
+        {
+            Reset();
+            return this;
+        }
+
+        object IEnumerator.Current => _current;
+
+        public T Current => _current;
+
+        public void UpdateCurrent()
+        {
+            if (dbread)
+            {
+                _current = Activator.CreateInstance<T>();
+                foreach (var propMap in sel_Maps)
+                    propMap.ReadToObject(_dataReader, _current);
+                list.Add(_current);
+            }
+            else _current = list[i_current];
+        }
+
+        public bool MoveNext()
+        {
+            bool hasNext;
+            if (dbread)
+                hasNext = _dataReader.Read();
+            else
+                hasNext = list.Count > ++i_current;
+            //move ahead and update current
+            if (hasNext) UpdateCurrent();
+            return hasNext;
+        }
+
+        public void Action(T t, string cmd)
+        {
+            //считываем связанные свойства в _dynaObject
+            foreach (var propMap in propMaps)
+                propMap.GetFromObject(t);
+            //отправляем изменения и получаем результаты
+            var outProps = _dataCmd.Action(cmd);
+            //обновляем связанные свойства по полученным результатам
+            foreach (var propMap in propMaps.Where(bp => outProps.Contains(bp.Field)))
+                propMap.SetToObject(t);
+        }
+
+        public abstract void OnReset(string message);
+
+        public void Reset()
+        {
+            string result = "Reset";
+            try
+            {
+                i_current = -1;
+                dbread = false;
+                if (!cached)
+                {
+                    _dataReader = _dataCmd.Select();
+                    if (_dataReader != null)
+                    {
+                        sel_Maps.Clear();
+                        foreach (var propMap in propMaps.Where(pm => pm.Field.Ordinal >= 0)) sel_Maps.Add(propMap);
+                        sel_Maps.Sort((l, r) => l.Field.Ordinal - r.Field.Ordinal);
+                        dbread = true;
+                    }
+                    cached = true;
+                }
+                result = "Ok";
+            }
+            catch (Exception ex)
+            {
+                result = ex.Message;
+            }
+            OnReset(result);
+        }
+
+        public void AutoMapProps(int cmd_bit)
+        {
+            foreach (var pair in _dynaRecord.FieldDict)
+            {
+                IDynaField field = pair.Value;
+                if ((field.GetOutMask() & cmd_bit) > 0) MapToCurrent(pair.Key, pair.Key);
+            }
+        }
+
+        public void MapToCurrent(string fieldName, string propName)
+        {
+            PropertyInfo info = _type.GetProperty(propName);
+            if (info == null || !_dynaRecord.FieldDict.ContainsKey(fieldName)) return;
+            IDynaField field = _dynaRecord.FieldDict[fieldName];
+            if (field.GetPropType() != info.PropertyType) return;
+            propMaps.Add(new PropMap(field)
+            {
+                GetMethod = info.GetGetMethod(),
+                SetMethod = info.GetSetMethod()
+            });
+        }
+
+        public void ResetCache()
+        {
+            list.Clear();
+            _dataReader?.Close();
+            cached = false;
+        }
+
+        public void Dispose()
+        {
+            _dynaRecord?.Dispose();
         }
 
     }
@@ -357,6 +639,7 @@ namespace Kobdik.DataModule
 
         public void Open(Stream stream)
         {
+            win1251 = Encoding.GetEncoding(1251);
             if (stream == null)
             {
                 builder = new StringBuilder();
@@ -370,7 +653,6 @@ namespace Kobdik.DataModule
                 result = "Open stream writer..";
             }
             //writer.Culture = new CultureInfo("ru-RU");
-            win1251 = Encoding.GetEncoding(1251);
             stack = new Stack<byte>(4);
             empty = true;
         }
@@ -592,196 +874,12 @@ namespace Kobdik.DataModule
             catch (Exception) { }
             finally
             {
-                writer.Flush();
+                //writer.Flush();
                 writer.Close();
             }
         }
 
         public string Result => result;
-    }
-
-
-    public class PropMap
-    {
-        public IDynaField Field => dynaField;
-        public MethodInfo GetMethod { get; set; }
-        public MethodInfo SetMethod { get; set; }
-        private object[] parameters;
-        private IDynaField dynaField;
-
-        public PropMap(IDynaField field)
-        {
-            dynaField = field;
-            parameters = new object[1];
-        }
-
-        public void ReadToObject(IDataReader reader, object obj)
-        {
-            dynaField.ReadProp(reader);
-            if (SetMethod != null)
-            {
-                parameters[0] = dynaField.Value;
-                SetMethod.Invoke(obj, parameters);
-            }
-        }
-
-        public void GetFromObject(object obj)
-        {
-            if (GetMethod != null)
-                dynaField.Value = GetMethod.Invoke(obj, null);
-        }
-
-        public void SetToObject(object obj)
-        {
-            if (SetMethod != null)
-            {
-                parameters[0] = dynaField.Value;
-                SetMethod.Invoke(obj, parameters);
-            }
-        }
-
-    }
-
-    public abstract class DynaQuery<T> : IEnumerable<T>, IEnumerator<T>, IEnumerable, IEnumerator
-    {
-        protected IDynaRecord _dynaRecord;
-        protected IDataReader _dataReader;
-        protected List<PropMap> propMaps;
-        protected List<PropMap> sel_Maps;
-        private IDataCommand _dataCmd;
-        private List<T> list;
-        private T _current;
-        private Type _type;
-        private bool cached, dbread;
-        private int i_current;
-
-        public DynaQuery(IDynaRecord dynaRecord)
-        {
-            _dynaRecord = dynaRecord;
-            _dataCmd = dynaRecord as IDataCommand;
-            _current = Activator.CreateInstance<T>();
-            _type = _current.GetType();
-            propMaps = new List<PropMap>(16);
-            sel_Maps = new List<PropMap>(16);
-            list = new List<T>(1024);
-            cached = false;
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            //throw new NotImplementedException();
-            return ((IEnumerable<T>)this).GetEnumerator();
-        }
-
-        public IEnumerator<T> GetEnumerator()
-        {
-            Reset();
-            return this;
-        }
-
-        object IEnumerator.Current => _current;
-
-        public T Current => _current;
-
-        public void UpdateCurrent()
-        {
-            if (dbread)
-            {
-                _current = Activator.CreateInstance<T>();
-                foreach (var propMap in sel_Maps)
-                    propMap.ReadToObject(_dataReader, _current);
-                list.Add(_current);
-            }
-            else _current = list[i_current];
-        }
-
-        public bool MoveNext()
-        {
-            bool hasNext;
-            if (dbread)
-                hasNext = _dataReader.Read();
-            else
-                hasNext = list.Count > ++i_current;
-            //move ahead and update current
-            if (hasNext) UpdateCurrent();
-            return hasNext;
-        }
-
-        public void Action(T t, string cmd)
-        {
-            //считываем связанные свойства в _dynaObject
-            foreach (var propMap in propMaps)
-                propMap.GetFromObject(t);
-            //отправляем изменения и получаем результаты
-            var outProps = _dataCmd.Action(cmd);
-            //обновляем связанные свойства по полученным результатам
-            foreach (var propMap in propMaps.Where(bp => outProps.Contains(bp.Field)))
-                propMap.SetToObject(t);
-        }
-
-        public abstract void OnReset(string message);
-
-        public void Reset()
-        {
-            string result = "Reset";
-            try
-            {
-                i_current = -1;
-                dbread = false;
-                if (!cached)
-                {
-                    _dataReader = _dataCmd.Select();
-                    if (_dataReader != null)
-                    {
-                        sel_Maps.Clear();
-                        foreach (var propMap in propMaps.Where(pm => pm.Field.Ordinal >= 0)) sel_Maps.Add(propMap);
-                        sel_Maps.Sort((l, r) => l.Field.Ordinal - r.Field.Ordinal);
-                        dbread = true;
-                    }
-                    cached = true;
-                }
-                result = "Ok";
-            }
-            catch (Exception ex)
-            {
-                result = ex.Message;
-            }
-            OnReset(result);
-        }
-
-        public void AutoMapProps(int cmd_bit)
-        {
-            foreach (var pair in _dynaRecord.FieldDict)
-            {
-                IDynaField field = pair.Value;
-                if ((field.GetOutMask() & cmd_bit) > 0) MapToCurrent(pair.Key, pair.Key);
-            }
-        }
-
-        public void MapToCurrent(string fieldName, string propName)
-        {
-            PropertyInfo info = _type.GetProperty(propName);
-            if (info == null || !_dynaRecord.FieldDict.ContainsKey(fieldName)) return;
-            IDynaField field = _dynaRecord.FieldDict[fieldName];
-            if (field.GetPropType() != info.PropertyType) return;
-            propMaps.Add(new PropMap(field)
-            {
-                GetMethod = info.GetGetMethod(),
-                SetMethod = info.GetSetMethod()
-            });
-        }
-
-        public void ResetCache()
-        {
-            list.Clear();
-            cached = false;
-        }
-
-        public void Dispose()
-        {
-            _dynaRecord.Dispose();
-        }
-
     }
 
 }
